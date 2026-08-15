@@ -17,25 +17,19 @@
 
 The plugin is published on npm as `@gamegeek-saikel/dsh-fare-meter` and ships as an official DSH plugin bundle (both halves — host and browser — are mounted by a single `cordis.patch.yml` row).
 
-Install it into a web profile with the DSH CLI:
+Install it into a web profile with the official DSH CLI (via npx — no global installation needed):
 
 ```bash
-dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
+npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 ```
 
-Then start the harness with the DSH CLI:
-
-```bash
-dsh web
-```
-
-or with npx (official recommended way — no global DSH CLI installation needed):
+Then start the harness:
 
 ```bash
 npx @deepseek-ai/dsh web
 ```
 
-To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Overview
 

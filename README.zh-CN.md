@@ -17,25 +17,19 @@
 
 本插件已发布到 npm：`@gamegeek-saikel/dsh-fare-meter`，以官方 DSH 插件 bundle 形态交付（单个 `cordis.patch.yml` 行同时挂载 host 与浏览器两半）。
 
-通过 DSH CLI 装入 web profile：
+通过官方 DSH CLI（npx 方式，无需全局安装）装入 web profile：
 
 ```bash
-dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
+npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 ```
 
 然后启动：
 
 ```bash
-dsh web
-```
-
-或使用 npx（官方推荐方式，无需全局安装 DSH CLI）：
-
-```bash
 npx @deepseek-ai/dsh web
 ```
 
-安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
+如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 概述
 
