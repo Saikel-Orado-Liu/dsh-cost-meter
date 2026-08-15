@@ -11,7 +11,7 @@
  * route serves the balance + pricebook view (GET) and applies settings
  * mutations and manual refreshes (POST, trust-fenced like the balance route).
  *
- * @module @ljcscp/dsh-fare-meter
+ * @module @gamegeek-saikel/dsh-fare-meter
  */
 
 import type { Context } from '@deepseek-ai/cordis'

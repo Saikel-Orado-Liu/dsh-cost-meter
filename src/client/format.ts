@@ -1,7 +1,7 @@
 /**
  * Shared display formatting for amounts and timestamps.
  *
- * @module @ljcscp/dsh-fare-meter/client/format
+ * @module @gamegeek-saikel/dsh-fare-meter/client/format
  */
 
 /**

@@ -1,13 +1,13 @@
 /**
- * Package-owned invariant companion for `@ljcscp/dsh-fare-meter`.
- * @module @ljcscp/dsh-fare-meter/invariant
+ * Package-owned invariant companion for `@gamegeek-saikel/dsh-fare-meter`.
+ * @module @gamegeek-saikel/dsh-fare-meter/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@ljcscp/dsh-fare-meter'
+const PACKAGE_NAME = '@gamegeek-saikel/dsh-fare-meter'
 
 /** Cordis companion plugin name. */
 export const name = 'fare-meter-invariant'

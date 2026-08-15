@@ -7,7 +7,7 @@
  * labeled 估算/estimate). The lookup logic intentionally mirrors
  * `src/pricebook.ts` — keep the two in sync.
  *
- * @module @ljcscp/dsh-fare-meter/client/cost-math
+ * @module @gamegeek-saikel/dsh-fare-meter/client/cost-math
  */
 
 import { isPeakHour, PEAK_PRICING_START_MS } from '../pricing.ts'

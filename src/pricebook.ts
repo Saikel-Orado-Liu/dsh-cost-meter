@@ -14,7 +14,7 @@
  * mirror is the synchronous read face for the projection fold; the domain
  * write is a queued, fail-soft side effect.
  *
- * @module @ljcscp/dsh-fare-meter/pricebook
+ * @module @gamegeek-saikel/dsh-fare-meter/pricebook
  */
 
 import type { Context } from '@deepseek-ai/cordis'

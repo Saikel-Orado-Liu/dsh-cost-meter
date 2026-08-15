@@ -20,7 +20,7 @@
  * times, and the final `assistant/message` sample is authoritative. The
  * totals subtract the replaced step and add the replacement.
  *
- * @module @ljcscp/dsh-fare-meter/session-cost-projection
+ * @module @gamegeek-saikel/dsh-fare-meter/session-cost-projection
  */
 
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'

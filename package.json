@@ -1,6 +1,6 @@
 {
-  "name": "@ljcscp/dsh-fare-meter",
-  "description": "DeepSeek conversation cost tracking for the DeepSeek Harness Web GUI: price-snapshot-anchored per-turn cost (peak/off-peak aware), account balance, cost tab, per-message chips, and a header pill with live estimates.",
+  "name": "@gamegeek-saikel/dsh-fare-meter",
+  "description": "Cost tracking plugin for the DeepSeek Harness Web GUI — snapshot-anchored per-turn pricing, account balance, and live cost estimates.",
   "version": "0.1.0",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
@@ -108,5 +108,27 @@
     "vite-tsconfig-paths": "^6.1.1",
     "vitest": "^4.1.8",
     "zod": "^4.4.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Saikel-Orado-Liu/dsh-fare-meter.git"
+  },
+  "homepage": "https://github.com/Saikel-Orado-Liu/dsh-fare-meter#readme",
+  "bugs": {
+    "url": "https://github.com/Saikel-Orado-Liu/dsh-fare-meter/issues"
+  },
+  "keywords": [
+    "deepseek",
+    "dsh",
+    "dsh-plugin",
+    "cost-tracking",
+    "pricing",
+    "token-meter",
+    "typescript",
+    "react",
+    "cordis"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

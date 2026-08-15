@@ -10,7 +10,7 @@
  * arbitrarily deep delegation chains are included. Sessions whose projection
  * has no `sessionCost` value (no usage yet) are skipped.
  *
- * @module @ljcscp/dsh-fare-meter/subagent-cost
+ * @module @gamegeek-saikel/dsh-fare-meter/subagent-cost
  */
 
 import type { Session } from '@deepseek-ai/dsh-session'

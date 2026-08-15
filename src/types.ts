@@ -1,7 +1,7 @@
 /**
  * Wire and public vocabulary for the fare-meter plugin.
  *
- * @module @ljcscp/dsh-fare-meter/types
+ * @module @gamegeek-saikel/dsh-fare-meter/types
  */
 
 /**
