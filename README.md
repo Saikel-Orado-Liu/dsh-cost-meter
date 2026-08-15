@@ -23,10 +23,16 @@ Install it into a web profile with the DSH CLI:
 dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 ```
 
-Then start the harness:
+Then start the harness with the DSH CLI:
 
 ```bash
 dsh web
+```
+
+or with npx (official recommended way — no global DSH CLI installation needed):
+
+```bash
+npx @deepseek-ai/dsh web
 ```
 
 To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.

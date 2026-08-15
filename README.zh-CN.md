@@ -29,6 +29,12 @@ dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 dsh web
 ```
 
+或使用 npx（官方推荐方式，无需全局安装 DSH CLI）：
+
+```bash
+npx @deepseek-ai/dsh web
+```
+
 安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 概述
