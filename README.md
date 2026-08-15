@@ -13,6 +13,24 @@
 
 ---
 
+## Installation
+
+The plugin is published on npm as `@gamegeek-saikel/dsh-fare-meter` and ships as an official DSH plugin bundle (both halves — host and browser — are mounted by a single `cordis.patch.yml` row).
+
+Install it into a web profile with the DSH CLI:
+
+```bash
+dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
+```
+
+Then start the harness:
+
+```bash
+dsh web
+```
+
+To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+
 ## Overview
 
 Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange, and the upcoming 2026-08-17 peak/off-peak rollout), and a conversation spans many turns with cache-hit, cache-miss, cache-write, and output token buckets. Naively recomputing costs at *current* prices makes history drift every time the price table changes.
@@ -32,24 +50,6 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 | UI surfaces | Composer dock · Cost tab · per-reply chip · header pill (live estimate) · settings card |
 | Locale | Simplified Chinese (source) + English |
 | Complexity | Fully synchronous fold; O(1) price lookups via in-memory mirror |
-
-## Installation
-
-The plugin is published on npm as `@gamegeek-saikel/dsh-fare-meter` and ships as an official DSH plugin bundle (both halves — host and browser — are mounted by a single `cordis.patch.yml` row).
-
-Install it into a web profile with the DSH CLI:
-
-```bash
-dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
-```
-
-Then start the harness:
-
-```bash
-dsh web
-```
-
-To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Usage
 
