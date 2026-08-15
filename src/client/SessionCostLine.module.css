@@ -1,0 +1,19 @@
+/* Session-cost readout row: same posture and color as the shipped stats
+   line it follows (label-tertiary, centered, 12px) so the two dock entries
+   read as one strip. */
+
+.root {
+  display: block;
+  text-align: center;
+  max-width: var(--dsh-chat-content-width);
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  padding: 0 calc(var(--dsh-composer-side-clearance) + 16px) 4px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

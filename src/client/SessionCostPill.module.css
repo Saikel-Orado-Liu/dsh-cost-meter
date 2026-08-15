@@ -1,0 +1,94 @@
+/* Header utility pill: anchored total / live estimate + expandable detail.
+   Sized and colored to match the shipped "Session log" header capsule
+   (32px, transparent surface, border-l2, 18px radius); the detail panel
+   rides the product overlay surface (--dsw-alias-bg-overlay) and dismisses
+   on outside clicks or Escape, like the other header controls. */
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 32px;
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 18px;
+  background: 0 0;
+  color: var(--dsw-alias-label-primary);
+  font-family: var(--dsw-font-family);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.pill:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.pill:active {
+  transform: translateY(0.5px);
+}
+
+.pill[data-running='true'] {
+  color: var(--dsw-alias-brand-primary);
+}
+
+.pill[data-running='true']:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.estimateNote {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+.detail {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  min-width: 250px;
+  max-width: 340px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 12px;
+  background: var(--dsw-specific-menu);
+  box-shadow: var(--dsw-shadow-lv3);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.detailRow {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detailRowSecondary {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.detailRowMuted {
+  color: var(--dsw-alias-label-secondary);
+  opacity: 0.75;
+}
+
+.detailTotal {
+  font-size: 13px;
+  font-weight: 600;
+}

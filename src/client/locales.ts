@@ -1,0 +1,157 @@
+/** `fare-meter` namespace dictionaries. */
+
+/** Dictionary namespace owned by this plugin. */
+export const NS = 'fare-meter'
+
+/** Simplified Chinese dictionary (the key-set source of truth). */
+export const zh = {
+  // View tab
+  'view.cost': '花费',
+  'view.empty': '暂无花费数据',
+  'view.total': '总花费',
+  'view.uncached': '输入（缓存未命中）',
+  'view.cacheRead': '输入（缓存命中）',
+  'view.output': '输出',
+  'view.cacheWriteTokens': '缓存写入',
+  'view.unpriced': '{count} 步无价格',
+  'view.steps': '每轮回复花费',
+
+  // Step list
+  'step.turn': '第 {turn} 轮',
+  'step.model': '模型 {model}',
+  'step.time': '{time}',
+  'step.tokens': '未命中 {uncached} · 缓存读 {read} · 缓存写 {write} · 输出 {output}',
+  'step.cost': '花费 {amount}',
+  'step.snapshot': '快照 · {time}',
+  'step.unpriced': '—（{reason}）',
+  'reason.NO_MODEL': '无模型信息',
+  'reason.NO_PRICE': '无价格',
+
+  // Shared amounts
+  'cost.label': '本会话 {amount}',
+  'line.uncached': '非缓存输入 {amount}',
+  'line.cacheRead': '缓存输入 {amount}',
+  'line.output': '输出 {amount}',
+  'line.subagent': '子代理 {amount}',
+  'pill.label': '本对话 {amount}',
+  'pill.estimate': '预计 {amount}（进行中）',
+  'pill.estimateNote': '估算',
+  'pill.detail.total': '总花费 {amount}',
+  'pill.detail.snapshot': '价格快照（{time}）',
+  'pill.detail.model': '模型 {model}',
+  'pill.detail.source': '价格来源 {source}',
+  'source.official': '官方页面',
+  'source.fallback': '内置回退',
+  'source.manual': '手动',
+  'source.openrouter': 'OpenRouter',
+  'source.none': '无',
+  'band.peak': '高峰价',
+  'band.offPeak': '闲时价',
+  'band.single': '单价',
+
+  // Chip
+  'chip.title': '本回复花费 {amount}',
+  'chip.unpriced': '—',
+
+  // Balance (inherited posture)
+  'balance.label': '余额 {amount}',
+  'balance.failed': '余额不可用',
+  'balance.detail': '余额 {amount}（赠送 {granted} · 充值 {toppedUp}）',
+  'balance.suspended': '账户已暂停付费请求',
+  'refreshedAt': '更新于 {time}',
+
+  // Plugin configuration card
+  'settings.title': '花费计价',
+  'settings.current': '当前快照 · {source} · {time}',
+  'settings.noSnapshot': '尚无价格快照',
+  'settings.refresh': '立即刷新',
+  'settings.refreshing': '刷新中…',
+  'settings.overrides': '按模型价目表（手动覆盖，元/百万 tokens）',
+  'settings.aliases': 'OpenRouter 别名映射',
+  'settings.discount': '缓存折扣系数（OpenRouter）',
+  'settings.fx': '汇率（USD→CNY）',
+  'settings.fx.auto': '自动',
+  'settings.fx.manual': '手动',
+  'settings.balance': '显示余额',
+  'settings.openrouter': '允许 OpenRouter 回退',
+  'settings.save': '保存',
+  'settings.discard': '丢弃',
+  'settings.saved': '已保存',
+  'settings.error': '操作失败：{error}',
+  'settings.jsonHint': 'JSON 对象，键为模型，值含 single/offPeak/peak 价格桶',
+} as const
+
+/** English dictionary, key-identical to the Chinese source of truth. */
+export const en: Record<ConversationCostKey, string> = {
+  'view.cost': 'Cost',
+  'view.empty': 'No cost data yet',
+  'view.total': 'Total',
+  'view.uncached': 'Input (cache miss)',
+  'view.cacheRead': 'Input (cache hit)',
+  'view.output': 'Output',
+  'view.cacheWriteTokens': 'Cache write',
+  'view.unpriced': '{count} steps unpriced',
+  'view.steps': 'Per-reply cost',
+
+  'step.turn': 'Turn {turn}',
+  'step.model': 'Model {model}',
+  'step.time': '{time}',
+  'step.tokens': 'miss {uncached} · read {read} · write {write} · out {output}',
+  'step.cost': 'Cost {amount}',
+  'step.snapshot': 'snapshot · {time}',
+  'step.unpriced': '—（{reason}）',
+  'reason.NO_MODEL': 'no model info',
+  'reason.NO_PRICE': 'no price',
+
+  'cost.label': 'Session {amount}',
+  'line.uncached': 'Uncached input {amount}',
+  'line.cacheRead': 'Cached input {amount}',
+  'line.output': 'Output {amount}',
+  'line.subagent': 'Subagents {amount}',
+  'pill.label': 'This chat {amount}',
+  'pill.estimate': '≈ {amount} (in progress)',
+  'pill.estimateNote': 'estimate',
+  'pill.detail.total': 'Total {amount}',
+  'pill.detail.snapshot': 'Price snapshot ({time})',
+  'pill.detail.model': 'Model {model}',
+  'pill.detail.source': 'Price source {source}',
+  'source.official': 'official page',
+  'source.fallback': 'built-in fallback',
+  'source.manual': 'manual',
+  'source.openrouter': 'OpenRouter',
+  'source.none': 'none',
+  'band.peak': 'peak',
+  'band.offPeak': 'off-peak',
+  'band.single': 'list',
+
+  'chip.title': 'This reply cost {amount}',
+  'chip.unpriced': '—',
+
+  'balance.label': 'Balance {amount}',
+  'balance.failed': 'Balance unavailable',
+  'balance.detail': 'Balance {amount} (granted {granted} · topped up {toppedUp})',
+  'balance.suspended': 'Account suspended for paid requests',
+  'refreshedAt': 'Updated at {time}',
+
+  'settings.title': 'Fare meter',
+  'settings.current': 'Current snapshot · {source} · {time}',
+  'settings.noSnapshot': 'No price snapshot yet',
+  'settings.refresh': 'Refresh now',
+  'settings.refreshing': 'Refreshing…',
+  'settings.overrides': 'Per-model prices (manual overrides, CNY per 1M tokens)',
+  'settings.aliases': 'OpenRouter alias map',
+  'settings.discount': 'Cache-read discount (OpenRouter)',
+  'settings.fx': 'Exchange rate (USD→CNY)',
+  'settings.fx.auto': 'Auto',
+  'settings.fx.manual': 'Manual',
+  'settings.balance': 'Show balance',
+  'settings.openrouter': 'Allow OpenRouter fallback',
+  'settings.save': 'Save',
+  'settings.discard': 'Discard',
+  'settings.saved': 'Saved',
+  'settings.error': 'Operation failed: {error}',
+  'settings.jsonHint': 'JSON object keyed by model; values carry single/offPeak/peak price buckets',
+}
+
+/** Key domain of the `fare-meter` namespace (zh is the source of truth). */
+export type ConversationCostKey = keyof typeof zh

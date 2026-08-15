@@ -1,0 +1,186 @@
+/* Plugin configuration card: mirrors the shipped plugin-card surface
+   (PluginCard.module.css + fields.module.css) — same tokens, same layout. */
+
+.card {
+  border: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-3);
+  border-radius: 12px;
+  list-style: none;
+  transition: border-color 0.16s, background 0.16s;
+}
+
+.card:hover {
+  border-color: var(--dsw-alias-label-dimmed);
+}
+
+.cardOpen {
+  background: var(--dsw-alias-bg-layer-2);
+  border-color: var(--dsw-alias-label-dimmed);
+}
+
+.header {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: 0 0;
+  border: 0;
+  border-radius: 12px;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  display: flex;
+}
+
+.header:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: -2px;
+}
+
+.headText {
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  display: flex;
+}
+
+.name {
+  color: var(--dsw-alias-label-primary);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.description {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.chevron {
+  color: var(--dsw-alias-label-tertiary);
+  flex: none;
+  transition: transform 0.16s;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}
+
+.pending {
+  white-space: nowrap;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 999px;
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.body {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  margin: 0 16px;
+  padding-bottom: 8px;
+}
+
+.field {
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  display: flex;
+}
+
+.field + .field {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.head {
+  align-items: center;
+  gap: 8px;
+  display: flex;
+}
+
+.label {
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.input,
+.select,
+.textarea {
+  box-sizing: border-box;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.input {
+  padding: 5px 8px;
+  width: 120px;
+}
+
+.select {
+  padding: 5px 8px;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 6px 8px;
+  font-family: var(--dsw-font-mono, monospace);
+  font-size: 12px;
+  resize: vertical;
+}
+
+.inline {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.hint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.footer {
+  border-top: 1px solid var(--dsw-alias-border-l2);
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+  display: flex;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.status {
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 12px;
+  line-height: 1.5;
+}

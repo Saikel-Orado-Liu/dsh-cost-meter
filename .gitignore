@@ -1,0 +1,10 @@
+# 依赖与构建缓存
+node_modules/
+*.tsbuildinfo
+
+# 构建产物（运行时装载走 profiles 交付目录，产物不入库）
+lib/
+
+# 本地日志与系统文件
+*.log
+.DS_Store
