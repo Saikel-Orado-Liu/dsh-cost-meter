@@ -35,13 +35,21 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、以及 
 
 ## 安装
 
-本插件以官方 DSH 插件 bundle 形态交付（单个 `cordis.patch.yml` 行同时挂载 host 与浏览器两半）。通过 DSH CLI 装入 web profile：
+本插件已发布到 npm：`@gamegeek-saikel/dsh-fare-meter`，以官方 DSH 插件 bundle 形态交付（单个 `cordis.patch.yml` 行同时挂载 host 与浏览器两半）。
+
+通过 DSH CLI 装入 web profile：
 
 ```bash
-dsh plugin --profile web add <路径或 git 地址或 npm 包名>
+dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 ```
 
-开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
+然后启动：
+
+```bash
+dsh web
+```
+
+安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 用法
 

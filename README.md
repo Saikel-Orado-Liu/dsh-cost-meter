@@ -35,13 +35,21 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 
 ## Installation
 
-The plugin ships as an official DSH plugin bundle (both halves — host and browser — are mounted by a single `cordis.patch.yml` row). Install it into a web profile with the DSH CLI:
+The plugin is published on npm as `@gamegeek-saikel/dsh-fare-meter` and ships as an official DSH plugin bundle (both halves — host and browser — are mounted by a single `cordis.patch.yml` row).
+
+Install it into a web profile with the DSH CLI:
 
 ```bash
-dsh plugin --profile web add <path-or-git-url-or-npm-name>
+dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
 ```
 
-The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+Then start the harness:
+
+```bash
+dsh web
+```
+
+To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Usage
 
