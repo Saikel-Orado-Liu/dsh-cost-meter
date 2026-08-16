@@ -1,7 +1,7 @@
 {
   "name": "@gamegeek-saikel/dsh-cost-meter",
   "description": "Cost tracking plugin for the DeepSeek Harness Web GUI — snapshot-anchored per-turn pricing, account balance, and live cost estimates.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
