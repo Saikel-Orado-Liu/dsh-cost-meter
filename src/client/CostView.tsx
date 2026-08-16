@@ -15,7 +15,7 @@ import { bandForTime, combineTotals, peakOffPeakMultiplier, subagentSpend } from
 import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import css from './CostView.module.css'
 
-export type CostViewLocale = PropsLocale<'fare-meter'>['t']
+export type CostViewLocale = PropsLocale<'cost-meter'>['t']
 
 export interface CostViewProps {
   useProjection: UseProjection
@@ -37,7 +37,7 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
 
   useEffect(() => {
     let alive = true
-    void fetch(`/fare-meter?session=${encodeURIComponent(sessionId)}&currency=${currency}`, { cache: 'no-store' })
+    void fetch(`/cost-meter?session=${encodeURIComponent(sessionId)}&currency=${currency}`, { cache: 'no-store' })
       .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
       .then((data) => {
         if (!alive || data === null) return

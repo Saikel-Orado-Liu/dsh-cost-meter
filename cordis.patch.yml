@@ -1,12 +1,12 @@
-# @gamegeek-saikel/dsh-fare-meter bundle patch: inserts its plugin row into the
+# @gamegeek-saikel/dsh-cost-meter bundle patch: inserts its plugin row into the
 # web profile roster. The bundle is the official dsh plugin shape — install it
 # with `dsh plugin --profile web add <path-or-git-url-or-npm-name>`.
 #
 # The single row mounts BOTH halves: the host side (DeepSeek Get User Balance
-# query + pricebook domain + sessionCost projection + the /fare-meter
+# query + pricebook domain + sessionCost projection + the /cost-meter
 # route) and the browser side (cost tab, per-message chips, header pill,
 # composer readout and the settings card, via the dsh.client declaration in
 # package.json).
 - insert:
-    - id: fare-meter
-      name: '@gamegeek-saikel/dsh-fare-meter'
+    - id: cost-meter
+      name: '@gamegeek-saikel/dsh-cost-meter'

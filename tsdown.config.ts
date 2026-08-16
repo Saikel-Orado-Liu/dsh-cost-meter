@@ -1,6 +1,6 @@
 import { clientBundle } from './shared/tsdown.client.ts'
 
-export default clientBundle('@gamegeek-saikel/dsh-fare-meter', [
+export default clientBundle('@gamegeek-saikel/dsh-cost-meter', [
   'src/index.ts',
   'src/invariant.ts',
 ], {

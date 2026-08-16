@@ -14,7 +14,7 @@
  * mirror is the synchronous read face for the projection fold; the domain
  * write is a queued, fail-soft side effect.
  *
- * @module @gamegeek-saikel/dsh-fare-meter/pricebook
+ * @module @gamegeek-saikel/dsh-cost-meter/pricebook
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -556,7 +556,7 @@ export class PricebookHandle {
       this.domain = await storageDomain.open(domain) as Domain<typeof PRICEBOOK_DOMAIN>
       this.state = this.domain.global.get()
     } catch (error) {
-      console.warn(`fare-meter: pricebook domain unavailable, keeping in-memory state: ${error instanceof Error ? error.message : String(error)}`)
+      console.warn(`cost-meter: pricebook domain unavailable, keeping in-memory state: ${error instanceof Error ? error.message : String(error)}`)
       this.domain = undefined
     }
   }
@@ -568,7 +568,7 @@ export class PricebookHandle {
     this.persistTail = this.persistTail
       .then(() => this.domain!.global.set(state))
       .catch((error: unknown) => {
-        console.warn(`fare-meter: pricebook persist failed: ${error instanceof Error ? error.message : String(error)}`)
+        console.warn(`cost-meter: pricebook persist failed: ${error instanceof Error ? error.message : String(error)}`)
       })
   }
 
@@ -751,7 +751,7 @@ export class PricebookHandle {
   }
 
   /**
-   * Apply a resolved plugin-settings snapshot (the `fare-meter`
+   * Apply a resolved plugin-settings snapshot (the `cost-meter`
    * settings namespace) to the pricebook: the editable configuration fields
    * overwrite the persisted state and the resolved table re-anchors (a new
    * snapshot starts when anything user-visible changed). Never throws.
@@ -796,7 +796,7 @@ export class PricebookHandle {
       this.recompute(Date.now())
       this.persist()
     } catch (error) {
-      console.warn(`fare-meter: settings apply failed: ${error instanceof Error ? error.message : String(error)}`)
+      console.warn(`cost-meter: settings apply failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 

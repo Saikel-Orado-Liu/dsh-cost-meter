@@ -1,4 +1,4 @@
-<h1 align="center">DSH Fare Meter（对话花费计量）</h1>
+<h1 align="center">DSH Cost Meter（对话花费计量）</h1>
 
 <p align="center">
   <a href="./README.md">English</a>
@@ -6,21 +6,21 @@
   <strong>简体中文</strong>
 </p>
 
-**DSH Fare Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。
+**DSH Cost Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。
 
-- Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影、子代理成本聚合，以及带信任围栏的 `/fare-meter` 路由。
+- Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影、子代理成本聚合，以及带信任围栏的 `/cost-meter` 路由。
 - Client 半区（`src/client/`）：输入框下方读数、花费标签页、每条回复成本小标签、头部胶囊，以及插件配置卡——内置简体中文与英文。
 
 ---
 
 ## 安装
 
-本插件已发布到 npm：`@gamegeek-saikel/dsh-fare-meter`，以官方 DSH 插件 bundle 形态交付（单个 `cordis.patch.yml` 行同时挂载 host 与浏览器两半）。
+本插件已发布到 npm：`@gamegeek-saikel/dsh-cost-meter`，以官方 DSH 插件 bundle 形态交付（单个 `cordis.patch.yml` 行同时挂载 host 与浏览器两半）。
 
 通过官方 DSH CLI（npx 方式，无需全局安装）装入 web profile：
 
 ```bash
-npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-fare-meter
+npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 ```
 
 然后启动：
@@ -35,7 +35,7 @@ npx @deepseek-ai/dsh web
 
 DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、以及 2026-08-17 上线的峰值/闲时分时计价），而一次对话跨越很多轮，且每轮都含缓存命中、缓存未命中、缓存写入与输出等 token 桶。若按"当前价格"重算成本，每次价目变动都会让历史记录漂移。
 
-**Fare Meter** 用**只追加的价格簿**解决这一问题：每次价格/汇率/分时表变化都会开启一个新的不可变 `PricebookSnapshot`（单调 `version`、`effectiveAt`），每个用量事件锚定到其自身时刻生效的快照。结果是一个**只增长、永不改写**的不可变逐步成本账本。流式实时估算明确标注为"估算"——因为它使用*当前*价格；一旦该步结算，即被精确的锚定值取代。
+**Cost Meter** 用**只追加的价格簿**解决这一问题：每次价格/汇率/分时表变化都会开启一个新的不可变 `PricebookSnapshot`（单调 `version`、`effectiveAt`），每个用量事件锚定到其自身时刻生效的快照。结果是一个**只增长、永不改写**的不可变逐步成本账本。流式实时估算明确标注为"估算"——因为它使用*当前*价格；一旦该步结算，即被精确的锚定值取代。
 
 ## 关键性质
 
@@ -63,7 +63,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、以及 
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
 | 插件配置卡 | `settings.plugin.item` | 按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新 |
 
-`/fare-meter` 宿主路由通过 GET 提供余额快照、价格簿视图与子代理合计；通过 POST（`{"action":"refresh"}`）执行手动刷新。与 `/api` 围栏一致，路由只应答 `Host` 头为回环地址或已声明可信主机的请求——这是防 DNS 重绑定的安全校验。
+`/cost-meter` 宿主路由通过 GET 提供余额快照、价格簿视图与子代理合计；通过 POST（`{"action":"refresh"}`）执行手动刷新。与 `/api` 围栏一致，路由只应答 `Host` 头为回环地址或已声明可信主机的请求——这是防 DNS 重绑定的安全校验。
 
 ## 价格簿与快照锚定
 

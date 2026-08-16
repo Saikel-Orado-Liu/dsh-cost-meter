@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Fare-meter client surfaces: the shared formatting/estimate math,
+ * Cost-meter client surfaces: the shared formatting/estimate math,
  * the dock readout rendering the ANCHORED projection total plus the balance,
  * the per-reply chip, and the header pill with the streaming estimate.
  */

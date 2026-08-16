@@ -1,7 +1,7 @@
 /**
- * Wire and public vocabulary for the fare-meter plugin.
+ * Wire and public vocabulary for the cost-meter plugin.
  *
- * @module @gamegeek-saikel/dsh-fare-meter/types
+ * @module @gamegeek-saikel/dsh-cost-meter/types
  */
 
 /**
@@ -215,7 +215,7 @@ export interface PricebookState {
 }
 
 /**
- * The `/fare-meter` pricebook payload served to the browser: the
+ * The `/cost-meter` pricebook payload served to the browser: the
  * current snapshot plus the editable configuration and refresh diagnostics.
  */
 export interface PricebookView {
@@ -344,7 +344,7 @@ export interface SubagentCost {
   totals: SessionCostTotals
 }
 
-/** The complete payload the `/fare-meter` route serves. */
+/** The complete payload the `/cost-meter` route serves. */
 export interface ConversationCostResponse {
   /** Latest balance snapshot; null before the first successful fetch. */
   balance: BalanceSnapshot | null

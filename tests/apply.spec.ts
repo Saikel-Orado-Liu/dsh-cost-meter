@@ -1,6 +1,6 @@
 /**
  * apply() integration: drives the real plugin apply against fake services —
- * the /fare-meter route (GET view, POST settings actions, trust
+ * the /cost-meter route (GET view, POST settings actions, trust
  * fence, method guard), the sessionCost projection registration, and the
  * pricebook snapshot lifecycle through the route. Network is stubbed so the
  * tests stay hermetic.
@@ -114,7 +114,7 @@ describe('apply integration', () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })
     expect(harness.projections.map(definition => definition.key)).toEqual(['sessionCost', 'sessionCostUsd'])
-    const route = harness.routes.find(candidate => candidate.path === '/fare-meter')
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')
     expect(route).toBeDefined()
     expect(harness.disposers.length).toBeGreaterThan(0)
   })
@@ -122,7 +122,7 @@ describe('apply integration', () => {
   it('serves the pricebook view and an anchored current snapshot over GET', async () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })
-    const route = harness.routes.find(candidate => candidate.path === '/fare-meter')!
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')!
     const { state, res } = responder()
     await route.handler(req('GET') as never, res as never)
     expect(state.status).toBe(200)
@@ -136,7 +136,7 @@ describe('apply integration', () => {
   it('refreshes the pricebook over POST (the only remaining action)', async () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })
-    const route = harness.routes.find(candidate => candidate.path === '/fare-meter')!
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')!
     const post = responder()
     await route.handler(req('POST', '127.0.0.1:3080', { action: 'refresh' }) as never, post.res as never)
     expect(post.state.status).toBe(200)
@@ -148,7 +148,7 @@ describe('apply integration', () => {
   it('rejects unknown actions with 400 and untrusted hosts with 403', async () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })
-    const route = harness.routes.find(candidate => candidate.path === '/fare-meter')!
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')!
     const bad = responder()
     await route.handler(req('POST', '127.0.0.1:3080', { action: 'nope' }) as never, bad.res as never)
     expect(bad.state.status).toBe(400)

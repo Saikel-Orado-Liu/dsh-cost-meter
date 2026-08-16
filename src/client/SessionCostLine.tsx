@@ -2,7 +2,7 @@
  * Composer-dock readout: the current session's anchored spend (the
  * `sessionCost` projection — price-snapshot-anchored, never recomputed at
  * current prices) plus the DeepSeek account balance (host
- * `/fare-meter` route), refreshed every minute. The hover detail
+ * `/cost-meter` route), refreshed every minute. The hover detail
  * breaks the spend into the three billed categories (uncached input incl.
  * cache writes, cache reads, output) and names the anchored price snapshot.
  *
@@ -22,12 +22,12 @@ import { currencySymbol, displayCurrency, formatMoney, formatTime } from './form
 import css from './SessionCostLine.module.css'
 
 /** Host route serving the balance snapshot and the pricebook view. */
-export const ENDPOINT = '/fare-meter'
+export const ENDPOINT = '/cost-meter'
 /** Balance refresh interval in milliseconds. */
 export const REFRESH_MS = 60_000
 
 /** Session-cost namespace key domain for the locale seat. */
-export type CostLocale = PropsLocale<'fare-meter'>['t']
+export type CostLocale = PropsLocale<'cost-meter'>['t']
 
 export interface SessionCostLineProps {
   useSession: SnapshotSelectorHook<ConversationSnapshot>

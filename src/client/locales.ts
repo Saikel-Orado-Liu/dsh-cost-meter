@@ -1,7 +1,7 @@
-/** `fare-meter` namespace dictionaries. */
+/** `cost-meter` namespace dictionaries. */
 
 /** Dictionary namespace owned by this plugin. */
-export const NS = 'fare-meter'
+export const NS = 'cost-meter'
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
@@ -141,7 +141,7 @@ export const en: Record<ConversationCostKey, string> = {
   'balance.suspended': 'Account suspended for paid requests',
   'refreshedAt': 'Updated at {time}',
 
-  'settings.title': 'Fare meter',
+  'settings.title': 'Cost meter',
   'settings.current': 'Current snapshot · {source} · {time}',
   'settings.noSnapshot': 'No price snapshot yet',
   'settings.refresh': 'Refresh now',
@@ -161,5 +161,5 @@ export const en: Record<ConversationCostKey, string> = {
   'settings.jsonHint': 'JSON object keyed by model; values carry single/offPeak/peak price buckets',
 }
 
-/** Key domain of the `fare-meter` namespace (zh is the source of truth). */
+/** Key domain of the `cost-meter` namespace (zh is the source of truth). */
 export type ConversationCostKey = keyof typeof zh

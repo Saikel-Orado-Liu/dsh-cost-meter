@@ -9,7 +9,7 @@
  * rewording still yields values when the numbers are present; failures
  * degrade to the built-in presets rather than throwing.
  *
- * @module @gamegeek-saikel/dsh-fare-meter/pricing
+ * @module @gamegeek-saikel/dsh-cost-meter/pricing
  */
 
 import type { CurrentPricing, PeakPricing, PriceBucket, PricingSnapshot } from './types.ts'

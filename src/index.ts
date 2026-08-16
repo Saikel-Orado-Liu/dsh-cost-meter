@@ -1,5 +1,5 @@
 /**
- * dsh-fare-meter host half: serves the DeepSeek account balance
+ * dsh-cost-meter host half: serves the DeepSeek account balance
  * (official `GET /user/balance`), the pricebook (persisted, snapshot-anchored
  * per-model pricing over the official page / built-in fallback / OpenRouter
  * chain), and drives the `sessionCost` projection that folds every usage
@@ -7,11 +7,11 @@
  *
  * The API key resolves per refresh through the credential seam; the balance
  * is cached for `refreshMs` to stay polite to the provider's rate limits;
- * the pricebook refresh cadence is `pricingRefreshHours`. The `/fare-meter`
+ * the pricebook refresh cadence is `pricingRefreshHours`. The `/cost-meter`
  * route serves the balance + pricebook view (GET) and applies settings
  * mutations and manual refreshes (POST, trust-fenced like the balance route).
  *
- * @module @gamegeek-saikel/dsh-fare-meter
+ * @module @gamegeek-saikel/dsh-cost-meter
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -44,7 +44,7 @@ export * from './session-cost-projection.ts'
 export * from './subagent-cost.ts'
 
 /** Stable Cordis plugin name. */
-export const name = 'fare-meter'
+export const name = 'cost-meter'
 /** Services required before the route and the projection can register. */
 export const inject = ['webServer', 'sessionProjections']
 
@@ -241,7 +241,7 @@ export async function fetchBalance(ctx: Context, config: ResolvedConfig): Promis
     return {
       ok: false,
       code: 'MISSING_CREDENTIAL',
-      message: `fare-meter: no API key for "${config.apiKeyEnv}"; store it through the credentials service or export it in the launching environment`,
+      message: `cost-meter: no API key for "${config.apiKeyEnv}"; store it through the credentials service or export it in the launching environment`,
     }
   }
   let response: Response
@@ -254,14 +254,14 @@ export async function fetchBalance(ctx: Context, config: ResolvedConfig): Promis
     return {
       ok: false,
       code: 'NETWORK',
-      message: `fare-meter: balance request failed: ${error instanceof Error ? error.message : String(error)}`,
+      message: `cost-meter: balance request failed: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
   if (!response.ok) {
     return {
       ok: false,
       code: `HTTP_${response.status}`,
-      message: `fare-meter: balance endpoint answered ${response.status} ${response.statusText}`,
+      message: `cost-meter: balance endpoint answered ${response.status} ${response.statusText}`,
     }
   }
   let wire: WireBalanceResponse
@@ -271,7 +271,7 @@ export async function fetchBalance(ctx: Context, config: ResolvedConfig): Promis
     return {
       ok: false,
       code: 'INVALID_RESPONSE',
-      message: `fare-meter: balance body unparsable: ${error instanceof Error ? error.message : String(error)}`,
+      message: `cost-meter: balance body unparsable: ${error instanceof Error ? error.message : String(error)}`,
     }
   }
   return {
@@ -298,17 +298,17 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 /** The only POST action left: an immediate remote refresh. The editable
- *  configuration moved to the `fare-meter` settings section. */
+ *  configuration moved to the `cost-meter` settings section. */
 interface SettingsAction {
   action: 'refresh'
 }
 
-/** The `fare-meter` settings namespace (plugin configuration page). */
-export const SETTINGS_NAMESPACE = settingsNamespace('fare-meter')
+/** The `cost-meter` settings namespace (plugin configuration page). */
+export const SETTINGS_NAMESPACE = settingsNamespace('cost-meter')
 
 /**
  * Mount the plugin: open the pricebook domain, refresh every remote source,
- * register the `sessionCost` projection, register the /fare-meter
+ * register the `sessionCost` projection, register the /cost-meter
  * route (GET view + POST settings/refresh), and keep the balance and the
  * official pricing fresh.
  * @param ctx - host context.
@@ -343,7 +343,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
   ctx.effect(() => () => {
     void pricebookCny.close()
     void pricebookUsd.close()
-  }, 'fare-meter: pricebook domains')
+  }, 'cost-meter: pricebook domains')
 
   // ── Plugin configuration section: the settings page renders the standard
   //  card; every resolved change is applied to both pricebooks and re-anchors.
@@ -362,11 +362,11 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
   // ── sessionCost projections: anchored per-step ledgers for CNY and USD. ──
   ctx.effect(
     () => ctx.sessionProjections.register(sessionCostProjection(pricebookCny, 'sessionCost')),
-    'fare-meter: sessionCost projection',
+    'cost-meter: sessionCost projection',
   )
   ctx.effect(
     () => ctx.sessionProjections.register(sessionCostProjection(pricebookUsd, 'sessionCostUsd')),
-    'fare-meter: sessionCostUsd projection',
+    'cost-meter: sessionCostUsd projection',
   )
 
   // ── Balance: cached refresh, one in-flight at a time. ──
@@ -390,7 +390,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
         return {
           ok: false,
           code: 'INTERNAL',
-          message: `fare-meter: ${error instanceof Error ? error.message : String(error)}`,
+          message: `cost-meter: ${error instanceof Error ? error.message : String(error)}`,
         } as BalanceSnapshot
       })
     }
@@ -403,7 +403,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     void pricebookUsd.refresh()
   }, resolved.pricingRefreshHours * 3_600_000)
   pricingTimer.unref?.()
-  ctx.effect(() => () => clearInterval(pricingTimer), 'fare-meter: pricing refresh timer')
+  ctx.effect(() => () => clearInterval(pricingTimer), 'cost-meter: pricing refresh timer')
 
   const respond = (res: ServerResponse, status: number, body: unknown): void => {
     res.writeHead(status, {
@@ -451,7 +451,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
 
   const route: WebRoute = {
     kind: 'exact',
-    path: '/fare-meter',
+    path: '/cost-meter',
     handler: async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'GET' && req.method !== 'POST') {
         res.writeHead(405, { allow: 'GET, POST' })
@@ -485,5 +485,5 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
       respond(res, 200, await buildResponse(sessionOf(req), currencyOf(req)))
     },
   }
-  ctx.effect(() => ctx.webServer.register(route), 'fare-meter: /fare-meter route')
+  ctx.effect(() => ctx.webServer.register(route), 'cost-meter: /cost-meter route')
 }

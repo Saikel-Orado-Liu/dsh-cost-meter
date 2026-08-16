@@ -1,7 +1,7 @@
 /**
- * Plugin configuration card (设置 → 插件 → fare-meter): the standard
+ * Plugin configuration card (设置 → 插件 → cost-meter): the standard
  * DSH plugin-card shape (collapsible header, disclosure body, save/discard
- * footer) over the `fare-meter` settings namespace. Every editable
+ * footer) over the `cost-meter` settings namespace. Every editable
  * field binds the settings scope (`ctx.settingsScope.bind`) — the same
  * transport the shipped llm-deepseek / bash / web-search cards use — so the
  * card looks, stages, and persists like every other plugin configuration.
@@ -16,10 +16,10 @@ import type { ConversationCostResponse } from '../types.ts'
 import { formatTime } from './format.ts'
 import css from './CostPluginCard.module.css'
 
-export type PluginCardLocale = PropsLocale<'fare-meter'>['t']
+export type PluginCardLocale = PropsLocale<'cost-meter'>['t']
 
 export interface CostPluginCardProps {
-  /** The bound settings scope for the `fare-meter` namespace. */
+  /** The bound settings scope for the `cost-meter` namespace. */
   scope: SettingsScope<unknown>
   t: PluginCardLocale
 }
@@ -78,7 +78,7 @@ export const CostPluginCard = memo(function CostPluginCard({ scope, t }: CostPlu
   useEffect(() => {
     let alive = true
     const load = (): void => {
-      void fetch('/fare-meter', { cache: 'no-store' })
+      void fetch('/cost-meter', { cache: 'no-store' })
         .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
         .then((data) => {
           if (!alive || data === null) return
@@ -138,7 +138,7 @@ export const CostPluginCard = memo(function CostPluginCard({ scope, t }: CostPlu
     setBusy(true)
     setStatus(null)
     setError(null)
-    void fetch('/fare-meter', {
+    void fetch('/cost-meter', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ action: 'refresh' }),

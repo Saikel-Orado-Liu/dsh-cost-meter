@@ -1,11 +1,11 @@
 /**
- * Fare-meter plugin, browser half: contributes the cost surfaces —
+ * Cost-meter plugin, browser half: contributes the cost surfaces —
  * the composer-dock readout (anchored session spend + account balance), the
  * Cost view tab, the per-reply cost chip, the header pill with the live
  * streaming estimate, and the plugin configuration card (设置 → 插件). The
  * anchored ledger arrives through the `sessionCost` projection; the balance
- * and the pricebook arrive over the trust-fenced host `/fare-meter`
- * route; the editable configuration binds the `fare-meter` settings
+ * and the pricebook arrive over the trust-fenced host `/cost-meter`
+ * route; the editable configuration binds the `cost-meter` settings
  * namespace through the standard settings scope.
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -26,13 +26,13 @@ import { CostPluginCard } from './CostPluginCard.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Fare meter and account balance copy. */
-    'fare-meter': ConversationCostKey
+    /** Cost meter and account balance copy. */
+    'cost-meter': ConversationCostKey
   }
 }
 
 /** The settings namespace this plugin owns (mirrors the host registration). */
-export const SETTINGS_NAMESPACE = 'fare-meter'
+export const SETTINGS_NAMESPACE = 'cost-meter'
 
 /** Required services for locale registration, slot contributions, and the settings scope. */
 export const inject = ['sessions', 'slots', 'locale', 'settingsScope']
@@ -42,7 +42,7 @@ export const inject = ['sessions', 'slots', 'locale', 'settingsScope']
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-fare-meter: dictionaries')
+  ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-cost-meter: dictionaries')
   const t = ctx.locale.bind(NS)
   const scope = ctx.settingsScope.bind({ namespace: SETTINGS_NAMESPACE })
 
@@ -52,7 +52,7 @@ export function apply(ctx: ClientContext): void {
     'conversation.composer.dock',
     () => ctx.slots.register({
       name: 'conversation.composer.dock',
-      id: 'fare-meter',
+      id: 'cost-meter',
       order: 1,
       locale: NS,
     }, SessionCostLine),
@@ -87,19 +87,19 @@ export function apply(ctx: ClientContext): void {
     'conversation.session.header.utilities',
     () => ctx.slots.register({
       name: 'conversation.session.header.utilities',
-      id: 'fare-meter',
+      id: 'cost-meter',
       order: -10,
       locale: NS,
     }, SessionCostPill),
   )
 
   // Plugin configuration card (设置 → 插件), standard plugin-card shape over
-  // the `fare-meter` settings namespace.
+  // the `cost-meter` settings namespace.
   ctx.slots.inject(
     'settings.plugin.item',
     () => ctx.slots.register({
       name: 'settings.plugin.item',
-      id: 'fare-meter',
+      id: 'cost-meter',
       order: 30,
       locale: NS,
       inject: () => ({ scope }),

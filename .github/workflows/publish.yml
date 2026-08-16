@@ -41,7 +41,7 @@ jobs:
         id: check
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if npm view "@gamegeek-saikel/dsh-fare-meter@$PKG_VERSION" version >/dev/null 2>&1; then
+          if npm view "@gamegeek-saikel/dsh-cost-meter@$PKG_VERSION" version >/dev/null 2>&1; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Version $PKG_VERSION already published; skipping publish."
           else

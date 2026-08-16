@@ -20,7 +20,7 @@ import { bandForTime, peakOffPeakMultiplier } from './cost-math.ts'
 import { currencySymbol, displayCurrency, formatMoney, formatMultiplier } from './format.ts'
 import css from './AssistantCostChip.module.css'
 
-export type ChipLocale = PropsLocale<'fare-meter'>['t']
+export type ChipLocale = PropsLocale<'cost-meter'>['t']
 
 export interface AssistantCostChipProps {
   /** Stable identity of the finalized assistant message the actions address. */
@@ -70,7 +70,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
 
   useEffect(() => {
     let alive = true
-    void fetch(`/fare-meter?currency=${currency}`, { cache: 'no-store' })
+    void fetch(`/cost-meter?currency=${currency}`, { cache: 'no-store' })
       .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
       .then((data) => {
         if (!alive || data === null) return

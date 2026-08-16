@@ -1,5 +1,5 @@
 {
-  "name": "@gamegeek-saikel/dsh-fare-meter",
+  "name": "@gamegeek-saikel/dsh-cost-meter",
   "description": "Cost tracking plugin for the DeepSeek Harness Web GUI — snapshot-anchored per-turn pricing, account balance, and live cost estimates.",
   "version": "0.2.1",
   "type": "module",
@@ -111,11 +111,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Saikel-Orado-Liu/dsh-fare-meter.git"
+    "url": "git+https://github.com/Saikel-Orado-Liu/dsh-cost-meter.git"
   },
-  "homepage": "https://github.com/Saikel-Orado-Liu/dsh-fare-meter#readme",
+  "homepage": "https://github.com/Saikel-Orado-Liu/dsh-cost-meter#readme",
   "bugs": {
-    "url": "https://github.com/Saikel-Orado-Liu/dsh-fare-meter/issues"
+    "url": "https://github.com/Saikel-Orado-Liu/dsh-cost-meter/issues"
   },
   "keywords": [
     "deepseek",

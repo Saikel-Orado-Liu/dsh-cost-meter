@@ -11,3 +11,6 @@ lib/
 
 # npm 本地缓存（发布时临时使用）
 .npm-cache*/
+
+# pnpm 本地存储
+.pnpm-store/

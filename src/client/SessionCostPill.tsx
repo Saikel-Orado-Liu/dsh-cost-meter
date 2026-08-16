@@ -25,7 +25,7 @@ import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatT
 import { ENDPOINT, REFRESH_MS } from './SessionCostLine.tsx'
 import css from './SessionCostPill.module.css'
 
-export type PillLocale = PropsLocale<'fare-meter'>['t']
+export type PillLocale = PropsLocale<'cost-meter'>['t']
 
 export interface SessionCostPillProps {
   useSession: SnapshotSelectorHook<ConversationSnapshot>

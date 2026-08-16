@@ -1,21 +1,21 @@
 /**
- * Package-owned invariant companion for `@gamegeek-saikel/dsh-fare-meter`.
- * @module @gamegeek-saikel/dsh-fare-meter/invariant
+ * Package-owned invariant companion for `@gamegeek-saikel/dsh-cost-meter`.
+ * @module @gamegeek-saikel/dsh-cost-meter/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@gamegeek-saikel/dsh-fare-meter'
+const PACKAGE_NAME = '@gamegeek-saikel/dsh-cost-meter'
 
 /** Cordis companion plugin name. */
-export const name = 'fare-meter-invariant'
+export const name = 'cost-meter-invariant'
 /** Service required before the companion can register. */
 export const inject = ['invariants']
 
 /**
- * Route-disposer symmetry: after the owning fiber of the /fare-meter
+ * Route-disposer symmetry: after the owning fiber of the /cost-meter
  * route unloads, the webserver must no longer answer that path. The probe
  * cycle registers and disposes twice on a reserved path — a leftover from
  * the first cycle makes the second register throw the duplicate error,
@@ -32,7 +32,7 @@ const install: InvariantInstaller = (ctx, fail) => {
       server.register(probe)()
       server.register(probe)()
     } catch {
-      fail('fare-meter webserver route disposer left a route registered — route tables and fiber lifecycles diverged')
+      fail('cost-meter webserver route disposer left a route registered — route tables and fiber lifecycles diverged')
     }
   }, { global: true })
 }
