@@ -116,8 +116,8 @@ function zhT(key: string, params?: Record<string, string>): string {
     'step.unpriced': '—（{reason}）',
     'reason.NO_MODEL': '无模型信息',
     'reason.NO_PRICE': '无价格',
-    'pill.label': '本对话 {amount}',
-    'pill.estimate': '预计 {amount}（进行中）',
+    'pill.label': '花费 {amount}',
+    'pill.estimate': '预计 {amount}',
     'pill.estimateNote': '估算',
     'pill.detail.total': '总花费 {amount}',
     'pill.detail.snapshot': '价格快照（{time}）',
@@ -462,7 +462,7 @@ describe('SessionCostPill', () => {
         t={zhT}
       />)
       await vi.advanceTimersByTimeAsync(0)
-      expect(screen.getByText('本对话 ¥3.02')).not.toBeNull()
+      expect(screen.getByText('花费 ¥3.02')).not.toBeNull()
     } finally {
       vi.useRealTimers()
     }
@@ -494,7 +494,7 @@ describe('SessionCostPill', () => {
       // The estimate projects the TOTAL after the reply settles: anchored 3.02 + 0.561 ≈ 3.58.
       const text = await screen.findByText(/预计/)
       expect(text.textContent).toContain('¥3.58')
-      expect(text.textContent).toContain('进行中')
+      expect(text.textContent).not.toContain('进行中')
       expect(text.textContent).toContain('估算')
     } finally {
       vi.useRealTimers()

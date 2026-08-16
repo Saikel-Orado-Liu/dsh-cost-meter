@@ -82,12 +82,13 @@ export function apply(ctx: ClientContext): void {
   )
 
   // Header pill: total / live estimate with the expandable detail.
+  // Negative order keeps it left of the built-in Session log utility.
   ctx.slots.inject(
     'conversation.session.header.utilities',
     () => ctx.slots.register({
       name: 'conversation.session.header.utilities',
       id: 'fare-meter',
-      order: 20,
+      order: -10,
       locale: NS,
     }, SessionCostPill),
   )
