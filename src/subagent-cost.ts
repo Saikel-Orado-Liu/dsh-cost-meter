@@ -59,6 +59,7 @@ export function collectSubagentCosts(
   agents: SubagentAgentsService,
   sessions: SubagentSessionsService,
   projections: SubagentProjectionsService,
+  projectionKey: 'sessionCost' | 'sessionCostUsd' = 'sessionCost',
 ): SubagentCost[] {
   const rootAgent = agents.get(rootSessionId)
   if (rootAgent === undefined) return []
@@ -77,7 +78,7 @@ export function collectSubagentCosts(
       const session = sessions.get(candidateId)
       if (session === undefined) continue
       const snapshot = projections.snapshot(session)
-      const cost = snapshot.values.sessionCost
+      const cost = snapshot.values[projectionKey]
       if (cost === undefined) continue
       result.push({
         sessionId: candidateId,

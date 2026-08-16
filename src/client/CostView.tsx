@@ -12,7 +12,7 @@ import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
 import { bandForTime, combineTotals, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatMultiplier, formatTime } from './format.ts'
+import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import css from './CostView.module.css'
 
 export type CostViewLocale = PropsLocale<'fare-meter'>['t']
@@ -29,13 +29,15 @@ function reasonText(step: SessionCostStep, t: CostViewLocale): string {
 }
 
 export const CostView = memo(function CostView({ useProjection, sessionId, t }: CostViewProps) {
-  const cost = useProjection('sessionCost')
+  const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
+  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
+  const cost = useProjection(projectionKey)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
-  const symbol = currencySymbol('CNY')
+  const symbol = currencySymbol(currency)
 
   useEffect(() => {
     let alive = true
-    void fetch(`/fare-meter?session=${encodeURIComponent(sessionId)}`, { cache: 'no-store' })
+    void fetch(`/fare-meter?session=${encodeURIComponent(sessionId)}&currency=${currency}`, { cache: 'no-store' })
       .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
       .then((data) => {
         if (!alive || data === null) return
@@ -45,7 +47,7 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
     return () => {
       alive = false
     }
-  }, [sessionId])
+  }, [sessionId, currency])
 
   if (cost === undefined || cost.steps.length === 0) {
     return <div className={css.root} data-testid="cost-view-empty">{t('view.empty')}</div>

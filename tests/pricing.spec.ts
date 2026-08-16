@@ -4,14 +4,18 @@
  * classification, and the effective bucket selection around the rollout.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   effectiveBucket,
   FALLBACK_CURRENT,
+  FALLBACK_CURRENT_USD,
   fetchPricing,
   isPeakHour,
   parseCurrentTable,
+  parseCurrentTableEn,
   parsePeakTable,
+  parsePeakTableEn,
+  PRICING_URL_EN,
 } from '../src/pricing.ts'
 
 /** Real markup captured from api-docs.deepseek.com (2026-08-14). */
@@ -29,6 +33,22 @@ const PAGE_HTML = `
 <table>
 <tr><td>deepseek-v4-flash</td><td>空闲时段</td><td>0.05元</td><td>1.5元</td><td>4.5元</td><td>高峰时段</td><td>0.10元</td><td>3.0元</td><td>9.0元</td></tr>
 <tr><td>deepseek-v4-pro</td><td>空闲时段</td><td>0.15元</td><td>4.5元</td><td>13.5元</td><td>高峰时段</td><td>0.30元</td><td>9.0元</td><td>27.0元</td></tr>
+</table>
+</body></html>
+`
+
+/** English markup captured from api-docs.deepseek.com (2026-08-17). */
+const PAGE_HTML_EN = `
+<html><body>
+<h1>Models &amp; Pricing</h1>
+<table>
+<tr><td colspan="3">PRICING</td><td>OFF-PEAK</td><td>PEAK</td></tr>
+<tr><td rowspan="2">1M INPUT TOKENS (CACHE HIT)</td><td>OFF-PEAK</td><td>$0.007</td><td>$0.022</td></tr>
+<tr><td>PEAK</td><td>$0.014</td><td>$0.044</td></tr>
+<tr><td rowspan="2">1M INPUT TOKENS (CACHE MISS)</td><td>OFF-PEAK</td><td>$0.22</td><td>$0.66</td></tr>
+<tr><td>PEAK</td><td>$0.44</td><td>$1.32</td></tr>
+<tr><td rowspan="2">1M OUTPUT TOKENS</td><td>OFF-PEAK</td><td>$0.66</td><td>$1.98</td></tr>
+<tr><td>PEAK</td><td>$1.32</td><td>$3.96</td></tr>
 </table>
 </body></html>
 `
@@ -67,6 +87,32 @@ describe('parsePeakTable', () => {
   })
 })
 
+describe('parseCurrentTableEn', () => {
+  it('parses USD price cells from the English current table', () => {
+    const parsed = parseCurrentTableEn(PAGE_HTML_EN)
+    expect(parsed).toEqual({
+      flash: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+      pro: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+    })
+  })
+})
+
+describe('parsePeakTableEn', () => {
+  it('parses USD off-peak/peak cells from the English peak table', () => {
+    const parsed = parsePeakTableEn(PAGE_HTML_EN)
+    expect(parsed).toEqual({
+      flash: {
+        offPeak: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+        peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
+      },
+      pro: {
+        offPeak: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+        peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
+      },
+    })
+  })
+})
+
 describe('fetchPricing', () => {
   it('folds a healthy page into a snapshot with effective prices', async () => {
     const fetchImpl = async () => ({
@@ -80,10 +126,31 @@ describe('fetchPricing', () => {
     expect(snapshot.error).toBeUndefined()
   })
 
+  it('folds the English page into a USD snapshot when locale is en', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => PAGE_HTML_EN,
+    }) as unknown as typeof fetch)
+    const snapshot = await fetchPricing(fetchImpl, 15_000, 'en')
+    expect(snapshot.currency).toBe('USD')
+    expect(snapshot.current.flash.inputPerMillion).toBe(0.22)
+    expect(snapshot.peak?.flash.peak.inputPerMillion).toBe(0.44)
+    expect(fetchImpl).toHaveBeenCalledWith(PRICING_URL_EN, expect.anything())
+  })
+
   it('degrades to the built-in list when the page is unreachable', async () => {
     const fetchImpl = (async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
     const snapshot = await fetchPricing(fetchImpl)
     expect(snapshot.current).toEqual(FALLBACK_CURRENT)
+    expect(snapshot.error).toContain('ECONNREFUSED')
+  })
+
+  it('uses the USD built-in fallback when the English page is unreachable', async () => {
+    const fetchImpl = (async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
+    const snapshot = await fetchPricing(fetchImpl, 15_000, 'en')
+    expect(snapshot.currency).toBe('USD')
+    expect(snapshot.current).toEqual(FALLBACK_CURRENT_USD)
     expect(snapshot.error).toContain('ECONNREFUSED')
   })
 

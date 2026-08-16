@@ -335,30 +335,38 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     snapshotHistoryLimit: resolved.snapshotHistoryLimit,
   }
 
-  // ── Pricebook: load persisted state, then refresh every remote source. ──
-  const pricebook = new PricebookHandle(ctx, pricebookConfig, undefined)
-  await pricebook.init()
-  await pricebook.refresh()
+  // ── Pricebooks: load persisted state, then refresh every remote source. ──
+  const pricebookCny = new PricebookHandle(ctx, pricebookConfig, undefined, 'CNY')
+  const pricebookUsd = new PricebookHandle(ctx, pricebookConfig, undefined, 'USD')
+  await Promise.all([pricebookCny.init(), pricebookUsd.init()])
+  await Promise.all([pricebookCny.refresh(), pricebookUsd.refresh()])
   ctx.effect(() => () => {
-    void pricebook.close()
-  }, 'fare-meter: pricebook domain')
+    void pricebookCny.close()
+    void pricebookUsd.close()
+  }, 'fare-meter: pricebook domains')
 
   // ── Plugin configuration section: the settings page renders the standard
-  //  card; every resolved change is applied to the pricebook and re-anchors.
+  //  card; every resolved change is applied to both pricebooks and re-anchors.
   let currentSettings: () => Config = () => config ?? {}
   installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, (config ?? {}) as never, {
     setSource: (source) => {
       currentSettings = source as () => Config
     },
     onChange: () => {
-      pricebook.applySettings(currentSettings())
+      const settings = currentSettings()
+      pricebookCny.applySettings(settings)
+      pricebookUsd.applySettings(settings)
     },
   })
 
-  // ── sessionCost projection: anchored per-step ledger. ──
+  // ── sessionCost projections: anchored per-step ledgers for CNY and USD. ──
   ctx.effect(
-    () => ctx.sessionProjections.register(sessionCostProjection(pricebook)),
+    () => ctx.sessionProjections.register(sessionCostProjection(pricebookCny, 'sessionCost')),
     'fare-meter: sessionCost projection',
+  )
+  ctx.effect(
+    () => ctx.sessionProjections.register(sessionCostProjection(pricebookUsd, 'sessionCostUsd')),
+    'fare-meter: sessionCostUsd projection',
   )
 
   // ── Balance: cached refresh, one in-flight at a time. ──
@@ -391,7 +399,8 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
 
   // ── Pricing: refresh on startup and on the configured cadence. ──
   const pricingTimer = setInterval(() => {
-    void pricebook.refresh()
+    void pricebookCny.refresh()
+    void pricebookUsd.refresh()
   }, resolved.pricingRefreshHours * 3_600_000)
   pricingTimer.unref?.()
   ctx.effect(() => () => clearInterval(pricingTimer), 'fare-meter: pricing refresh timer')
@@ -415,12 +424,24 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     }
   }
 
-  const buildResponse = async (rootSessionId: string | undefined): Promise<ConversationCostResponse> => {
+  /** Parse the `currency` query parameter; defaults to CNY. */
+  const currencyOf = (req: IncomingMessage): 'CNY' | 'USD' => {
+    try {
+      const url = new URL(req.url ?? '/', 'http://localhost')
+      return url.searchParams.get('currency') === 'USD' ? 'USD' : 'CNY'
+    } catch {
+      return 'CNY'
+    }
+  }
+
+  const buildResponse = async (rootSessionId: string | undefined, currency: 'CNY' | 'USD'): Promise<ConversationCostResponse> => {
     const agents = ctx.get('agents') as SubagentAgentsService | undefined
     const sessionsStore = ctx.get('sessions') as SubagentSessionsService | undefined
+    const pricebook = currency === 'USD' ? pricebookUsd : pricebookCny
+    const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
     const subagents = rootSessionId === undefined || agents === undefined || sessionsStore === undefined
       ? []
-      : collectSubagentCosts(rootSessionId, agents, sessionsStore, ctx.sessionProjections)
+      : collectSubagentCosts(rootSessionId, agents, sessionsStore, ctx.sessionProjections, projectionKey)
     return {
       balance: await refresh(),
       pricebook: pricebook.view(),
@@ -453,15 +474,15 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
           return
         }
         try {
-          await pricebook.refresh()
+          await Promise.all([pricebookCny.refresh(), pricebookUsd.refresh()])
         } catch (error) {
           respond(res, 500, { error: error instanceof Error ? error.message : String(error) })
           return
         }
-        respond(res, 200, await buildResponse(sessionOf(req)))
+        respond(res, 200, await buildResponse(sessionOf(req), currencyOf(req)))
         return
       }
-      respond(res, 200, await buildResponse(sessionOf(req)))
+      respond(res, 200, await buildResponse(sessionOf(req), currencyOf(req)))
     },
   }
   ctx.effect(() => ctx.webServer.register(route), 'fare-meter: /fare-meter route')

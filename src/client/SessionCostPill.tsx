@@ -21,7 +21,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import type { ConversationCostResponse, SessionCostProjection } from '../types.ts'
 import { bandForTime, blocksOutputTokens, bucketAt, cacheReadRatioOf, combineTotals, estimateCost, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatMultiplier, formatTime } from './format.ts'
+import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import { ENDPOINT, REFRESH_MS } from './SessionCostLine.tsx'
 import css from './SessionCostPill.module.css'
 
@@ -62,7 +62,9 @@ function useDismissOutside(open: boolean, onDismiss: () => void, anchor: RefObje
 }
 
 export const SessionCostPill = memo(function SessionCostPill({ useSession, useProjection, sessionId, t }: SessionCostPillProps) {
-  const cost = useProjection('sessionCost')
+  const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
+  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
+  const cost = useProjection(projectionKey)
   const pressure = useProjection('contextPressure')
   const running = useSession(runningOf)
   const partial = useSession(snapshot => snapshot.partial)
@@ -74,7 +76,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   useEffect(() => {
     let alive = true
     let timer: number | undefined
-    const endpoint = `${ENDPOINT}?session=${encodeURIComponent(sessionId)}`
+    const endpoint = `${ENDPOINT}?session=${encodeURIComponent(sessionId)}&currency=${currency}`
     const load = (): void => {
       void fetch(endpoint, { cache: 'no-store' })
         .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
@@ -90,7 +92,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
       alive = false
       if (timer !== undefined) window.clearInterval(timer)
     }
-  }, [sessionId])
+  }, [sessionId, currency])
 
   const projection = cost
   const model = projection?.model ?? null
@@ -98,7 +100,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const subagents = response?.subagents
   const combined = combineTotals(projection?.totals, subagents)
   const subSpend = subagentSpend(subagents)
-  const symbol = currencySymbol('CNY')
+  const symbol = currencySymbol(currency)
 
   // The estimate projects the TOTAL once the running reply settles: the
   // already-anchored ledger total (main + subagents) plus this reply's
@@ -112,7 +114,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
     const outputTokens = blocksOutputTokens(partial?.blocks)
     const stepEstimate = estimateCost(bucket, inputTokens, cachedRatio, outputTokens)
     return (combined?.cost ?? 0) + stepEstimate
-  }, [running, projection, combined, snapshot, model, pressure, partial])
+  }, [running, projection, combined, snapshot, model, pressure, partial, currency])
 
   if (projection === undefined && estimate === null) return null
 

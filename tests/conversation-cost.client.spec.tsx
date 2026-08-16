@@ -56,8 +56,10 @@ const PROJECTION: SessionCostProjection = {
 const RESPONSE: ConversationCostResponse = {
   balance: OK_BALANCE,
   pricebook: {
+    currency: 'CNY',
     current: {
       version: 1,
+      currency: 'CNY',
       effectiveAt: 1_779_000_000_000,
       source: 'official',
       usdCnyRate: null,
@@ -354,7 +356,7 @@ describe('SessionCostLine', () => {
       />)
       await vi.advanceTimersByTimeAsync(0)
       expect(fetches).toHaveBeenCalledTimes(1)
-      expect(fetches).toHaveBeenCalledWith(`${ENDPOINT}?session=s1`, expect.objectContaining({ cache: 'no-store' }))
+      expect(fetches).toHaveBeenCalledWith(`${ENDPOINT}?session=s1&currency=CNY`, expect.objectContaining({ cache: 'no-store' }))
       await vi.advanceTimersByTimeAsync(60_000)
       expect(fetches).toHaveBeenCalledTimes(2)
       unmount()

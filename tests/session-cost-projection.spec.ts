@@ -29,7 +29,7 @@ const flashPrices: Record<string, ModelPrice> = {
 }
 
 function snapshotFixture(version: number, effectiveAt: number): PricebookSnapshot {
-  return { version, effectiveAt, source: 'official', usdCnyRate: null, prices: { ...flashPrices } }
+  return { version, currency: 'CNY', effectiveAt, source: 'official', usdCnyRate: null, prices: { ...flashPrices } }
 }
 
 function handleWith(snapshots: PricebookSnapshot[]): PricebookHandle {
@@ -150,7 +150,7 @@ describe('foldSessionCost pricing and anchoring', () => {
     }
     handle.state = {
       ...handle.state,
-      snapshots: [...handle.state.snapshots, { version: 2, effectiveAt: POST_PEAK + 1_000, source: 'official', usdCnyRate: null, prices: changedPrices }],
+      snapshots: [...handle.state.snapshots, { version: 2, currency: 'CNY', effectiveAt: POST_PEAK + 1_000, source: 'official', usdCnyRate: null, prices: changedPrices }],
     }
 
     // A later step prices at the NEW snapshot; the old step keeps version 1.

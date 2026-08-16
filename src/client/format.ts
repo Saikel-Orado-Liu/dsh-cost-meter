@@ -22,6 +22,11 @@ export function currencySymbol(currency: string): string {
   }
 }
 
+/** Detect the display currency from the active locale dictionary. */
+export function displayCurrency(t: (key: string, params?: Record<string, string>) => string): 'CNY' | 'USD' {
+  return t('view.cost') === 'Cost' ? 'USD' : 'CNY'
+}
+
 /**
  * Compact money: two decimals above 1, four down to 0.01, six below.
  * Costs are CNY 元 with 4-decimal display precision; zero renders as 0.00.

@@ -49,6 +49,7 @@ const FLASH_PEAK: PriceBucket = { cacheReadPerMillion: 0.1, inputPerMillion: 3, 
 
 const OFFICIAL: PricingSnapshot = {
   fetchedAt: Date.now(),
+  currency: 'CNY',
   current: FALLBACK_CURRENT,
   peak: FALLBACK_PEAK,
   peakActive: true,
@@ -56,7 +57,7 @@ const OFFICIAL: PricingSnapshot = {
 }
 
 function snapshotFixture(version: number, effectiveAt: number, prices: Record<string, ModelPrice>): PricebookSnapshot {
-  return { version, effectiveAt, source: 'official', usdCnyRate: null, prices }
+  return { version, currency: 'CNY', effectiveAt, source: 'official', usdCnyRate: null, prices }
 }
 
 function handleWith(state: PricebookState): PricebookHandle {

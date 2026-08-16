@@ -65,6 +65,9 @@ export type BalanceSnapshot =
     message: string
   }
 
+/** Supported display/pricing currencies. */
+export type Currency = 'CNY' | 'USD'
+
 /**
  * Token prices per 1M tokens, mirroring the official DeepSeek price table.
  * All amounts share one currency (CNY for the official list prices).
@@ -107,6 +110,8 @@ export interface PeakPricing {
 export interface PricingSnapshot {
   /** Epoch millis when the official page was last fetched. */
   fetchedAt: number
+  /** Currency of this pricing page snapshot. */
+  currency: Currency
   /** Current (pre-rollout) official list prices; built-in fallback on fetch failure. */
   current: CurrentPricing
   /** Upcoming peak/off-peak table, when the page carried it. */
@@ -160,6 +165,8 @@ export interface ModelPrice {
 export interface PricebookSnapshot {
   /** Monotonic snapshot version (1-based). */
   version: number
+  /** Currency of the prices in this snapshot. */
+  currency: Currency
   /** Epoch millis when this snapshot became effective. */
   effectiveAt: number
   /** Highest-priority source that contributed at least one model. */
@@ -212,6 +219,8 @@ export interface PricebookState {
  * current snapshot plus the editable configuration and refresh diagnostics.
  */
 export interface PricebookView {
+  /** Currency of the pricebook view. */
+  currency: Currency
   /** The newest snapshot; null before the first successful refresh. */
   current: PricebookSnapshot | null
   /** Snapshot history, newest last (capped at the configured limit). */
@@ -347,7 +356,9 @@ export interface ConversationCostResponse {
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
-    /** Anchored per-step cost ledger of one session (this plugin). */
+    /** Anchored per-step cost ledger of one session (CNY pricebook). */
     sessionCost: SessionCostProjection
+    /** Anchored per-step cost ledger of one session (USD pricebook). */
+    sessionCostUsd: SessionCostProjection
   }
 }

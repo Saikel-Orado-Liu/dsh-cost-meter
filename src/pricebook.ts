@@ -21,8 +21,9 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
-import { FALLBACK_CURRENT, FALLBACK_PEAK, fetchPricing, isPeakHour, PEAK_PRICING_START_MS } from './pricing.ts'
+import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS } from './pricing.ts'
 import type {
+  Currency,
   CurrentPricing,
   FxConfig,
   ModelPrice,
@@ -75,6 +76,7 @@ const modelPriceSchema = z.object({
 
 const snapshotSchema = z.object({
   version: z.number().int().positive(),
+  currency: z.enum(['CNY', 'USD']).default('CNY'),
   effectiveAt: z.number().int().nonnegative(),
   source: z.enum(['manual', 'official', 'fallback', 'openrouter', 'none']),
   usdCnyRate: z.number().nullable(),
@@ -120,6 +122,14 @@ export function initialPricebookState(): PricebookState {
  */
 export const PRICEBOOK_DOMAIN = defineDomain({
   name: 'pricebook',
+  version: 1,
+  global: { schema: pricebookStateSchema, initial: initialPricebookState() },
+  tables: {},
+})
+
+/** USD pricebook storage domain, kept separate from the CNY domain. */
+export const PRICEBOOK_DOMAIN_USD = defineDomain({
+  name: 'pricebook_usd',
   version: 1,
   global: { schema: pricebookStateSchema, initial: initialPricebookState() },
   tables: {},
@@ -344,6 +354,8 @@ export function computePricebook(
   openrouter: OpenRouterInput | null,
   usdCnyRate: number,
   defaultRate: number,
+  fallbackPeak: PeakPricing = FALLBACK_PEAK,
+  currency: Currency = 'CNY',
 ): { prices: Record<string, ModelPrice>; primarySource: PriceSource } {
   const prices: Record<string, ModelPrice> = {}
 
@@ -356,7 +368,7 @@ export function computePricebook(
   const officialSource: PriceSource = official.error === undefined ? 'official' : 'fallback'
   for (const key of ['flash', 'pro'] as const) {
     if (prices[key] !== undefined) continue
-    const peakTable = official.peak ?? FALLBACK_PEAK
+    const peakTable = official.peak ?? fallbackPeak
     prices[key] = {
       source: officialSource,
       single: official.current[key],
@@ -366,16 +378,17 @@ export function computePricebook(
   }
 
   // 3. OpenRouter — fallback only: models with no domestic price yet.
-  if (openrouter !== null && openrouter.error === undefined && usdCnyRate > 0) {
+  const openRouterFx = currency === 'USD' ? 1 : usdCnyRate
+  if (openrouter !== null && openrouter.error === undefined && (currency === 'USD' || usdCnyRate > 0)) {
     const discount = state.cacheReadDiscount
     for (const [orId, usd] of Object.entries(openrouter.usdPrices)) {
       const alias = state.aliases[orId] ?? orId
       if (hasDomesticPrice(prices, alias)) continue // domestic price exists: OpenRouter stays out
       if (hasDomesticPrice(prices, orId)) continue
       const bucket: PriceBucket = {
-        cacheReadPerMillion: usd.inputPerMillionUsd * discount * usdCnyRate,
-        inputPerMillion: usd.inputPerMillionUsd * usdCnyRate,
-        outputPerMillion: usd.outputPerMillionUsd * usdCnyRate,
+        cacheReadPerMillion: usd.inputPerMillionUsd * discount * openRouterFx,
+        inputPerMillion: usd.inputPerMillionUsd * openRouterFx,
+        outputPerMillion: usd.outputPerMillionUsd * openRouterFx,
       }
       const entry: ModelPrice = { source: 'openrouter', single: bucket }
       prices[alias] = entry
@@ -516,7 +529,7 @@ export class PricebookHandle {
   state: PricebookState
   private domain: Domain<typeof PRICEBOOK_DOMAIN> | undefined
   private persistTail: Promise<void> = Promise.resolve()
-  private lastOfficial: OfficialPricingInput = { current: FALLBACK_CURRENT }
+  private lastOfficial: OfficialPricingInput
   private lastOpenRouter: OpenRouterInput | null = null
   private lastFxError: string | undefined
   private fetchedAt = 0
@@ -525,8 +538,10 @@ export class PricebookHandle {
     private readonly ctx: Context,
     private readonly config: PricebookResolvedConfig,
     persisted: PricebookState | undefined,
+    private readonly currency: Currency = 'CNY',
   ) {
     this.state = persisted ?? { ...initialPricebookState(), openRouterEnabled: config.openRouterEnabled }
+    this.lastOfficial = { current: currency === 'USD' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT }
   }
 
   /**
@@ -537,7 +552,8 @@ export class PricebookHandle {
     const storageDomain = this.ctx.get('storageDomain')
     if (storageDomain === undefined) return
     try {
-      this.domain = await storageDomain.open(PRICEBOOK_DOMAIN)
+      const domain = this.currency === 'USD' ? PRICEBOOK_DOMAIN_USD : PRICEBOOK_DOMAIN
+      this.domain = await storageDomain.open(domain) as Domain<typeof PRICEBOOK_DOMAIN>
       this.state = this.domain.global.get()
     } catch (error) {
       console.warn(`fare-meter: pricebook domain unavailable, keeping in-memory state: ${error instanceof Error ? error.message : String(error)}`)
@@ -632,12 +648,15 @@ export class PricebookHandle {
     const openrouter = this.config.openRouterEnabled ? this.lastOpenRouter : null
     const { prices, primarySource } = computePricebook(
       this.state, this.lastOfficial, openrouter, this.rate(), this.config.defaultFxRate,
+      this.currency === 'USD' ? FALLBACK_PEAK_USD : FALLBACK_PEAK,
+      this.currency,
     )
     const last = this.currentSnapshot()
     if (last !== undefined && pricesEqual(last.prices, prices)) return
     const version = (last?.version ?? 0) + 1
     const snapshot: PricebookSnapshot = {
       version,
+      currency: this.currency,
       effectiveAt: now,
       source: primarySource,
       usdCnyRate: this.rate(),
@@ -658,7 +677,7 @@ export class PricebookHandle {
     fx?: { rate: number | null; error?: string }
     openrouter?: OpenRouterInput
   }): Promise<void> {
-    const official = options?.official ?? await fetchPricing()
+    const official = options?.official ?? await fetchPricing(globalThis.fetch, 15_000, this.currency === 'USD' ? 'en' : 'zh')
     this.lastOfficial = officialInputOf(official)
     this.lastFxError = undefined
     if (options?.fx !== undefined) {
@@ -788,6 +807,7 @@ export class PricebookHandle {
     if (this.lastFxError !== undefined) errors.fx = this.lastFxError
     if (this.lastOpenRouter?.error !== undefined) errors.openRouter = this.lastOpenRouter.error
     return {
+      currency: this.currency,
       current: this.currentSnapshot() ?? null,
       snapshots: this.state.snapshots,
       overrides: this.state.overrides,

@@ -18,7 +18,7 @@ import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/clien
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../types.ts'
 import { combineTotals, subagentSpend } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatTime } from './format.ts'
+import { currencySymbol, displayCurrency, formatMoney, formatTime } from './format.ts'
 import css from './SessionCostLine.module.css'
 
 /** Host route serving the balance snapshot and the pricebook view. */
@@ -48,11 +48,11 @@ function balanceTooltip(balance: Extract<BalanceSnapshot, { ok: true }>, t: Cost
 }
 
 /** The tooltip's cost detail rows from the anchored projection. Never throws. */
-export function costDetail(cost: SessionCostProjection | undefined, model: string | undefined, t: CostLocale): string[] {
+export function costDetail(cost: SessionCostProjection | undefined, model: string | undefined, t: CostLocale, currency: 'CNY' | 'USD' = 'CNY'): string[] {
   const rows: string[] = []
   try {
     if (cost === undefined) return rows
-    const symbol = currencySymbol('CNY')
+    const symbol = currencySymbol(currency)
     const totals = cost.totals
     if (totals !== undefined && totals.pricedSteps > 0) {
       rows.push(t('cost.label', { amount: `${symbol}${formatMoney(totals.cost)}` }))
@@ -78,13 +78,15 @@ export function costDetail(cost: SessionCostProjection | undefined, model: strin
 }
 
 export const SessionCostLine = memo(function SessionCostLine({ useProjection, sessionId, t }: SessionCostLineProps) {
-  const cost = useProjection('sessionCost')
+  const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
+  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
+  const cost = useProjection(projectionKey)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {
     let alive = true
     let timer: number | undefined
-    const endpoint = `${ENDPOINT}?session=${encodeURIComponent(sessionId)}`
+    const endpoint = `${ENDPOINT}?session=${encodeURIComponent(sessionId)}&currency=${currency}`
     const load = (): void => {
       void fetch(endpoint, { cache: 'no-store' })
         .then((res) => {
@@ -106,7 +108,7 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
       alive = false
       if (timer !== undefined) window.clearInterval(timer)
     }
-  }, [sessionId])
+  }, [sessionId, currency])
 
   const balance = response?.balance
   const balanceEnabled = response?.pricebook?.balanceEnabled !== false
@@ -123,7 +125,7 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
 
   const parts: string[] = []
   try {
-    const symbol = currencySymbol('CNY')
+    const symbol = currencySymbol(currency)
     // Breakdown first (cached input, uncached input, output — combined with
     // subagents), then the main session total, then the subagent total, then
     // the balance.
@@ -150,9 +152,9 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
   const tooltipParts = useMemo(() => {
     const rows: string[] = []
     try {
-      rows.push(...costDetail(cost, model, t))
+      rows.push(...costDetail(cost, model, t, currency))
       if (subSpend > 0) {
-        rows.push(t('line.subagent', { amount: `${currencySymbol('CNY')}${formatMoney(subSpend)}` }))
+        rows.push(t('line.subagent', { amount: `${currencySymbol(currency)}${formatMoney(subSpend)}` }))
       }
       const pricebook = response?.pricebook
       if (pricebook !== undefined && pricebook.current !== null) {
@@ -169,7 +171,7 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
       /* keep the row alive */
     }
     return rows
-  }, [cost, model, t, balance, balanceEnabled, response, subSpend])
+  }, [cost, model, t, balance, balanceEnabled, response, subSpend, currency])
 
   const line = parts.join(' · ')
   const tooltip = tooltipParts.filter(Boolean).join(' · ')

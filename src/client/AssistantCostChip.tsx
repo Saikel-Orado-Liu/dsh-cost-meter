@@ -17,7 +17,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
 import { bandForTime, peakOffPeakMultiplier } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatMultiplier } from './format.ts'
+import { currencySymbol, displayCurrency, formatMoney, formatMultiplier } from './format.ts'
 import css from './AssistantCostChip.module.css'
 
 export type ChipLocale = PropsLocale<'fare-meter'>['t']
@@ -61,14 +61,16 @@ export function stepOf(
 }
 
 export const AssistantCostChip = memo(function AssistantCostChip({ messageId, useSession, useProjection, t }: AssistantCostChipProps) {
+  const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
+  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
   const step = useSession(snapshot => stepOfMessage(snapshot, messageId))
-  const cost = useProjection('sessionCost')
+  const cost = useProjection(projectionKey)
   const ledger = step === null ? undefined : stepOf(cost?.steps, step.turn, step.step)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
 
   useEffect(() => {
     let alive = true
-    void fetch('/fare-meter', { cache: 'no-store' })
+    void fetch(`/fare-meter?currency=${currency}`, { cache: 'no-store' })
       .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
       .then((data) => {
         if (!alive || data === null) return
@@ -78,7 +80,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
     return () => {
       alive = false
     }
-  }, [])
+  }, [currency])
 
   if (ledger === undefined || ledger.cost === null) {
     if (ledger === undefined) return null
@@ -89,7 +91,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
     )
   }
 
-  const amount = `${currencySymbol('CNY')}${formatMoney(ledger.cost)}`
+  const amount = `${currencySymbol(currency)}${formatMoney(ledger.cost)}`
   const band = bandForTime(Date.now())
   const ratio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, ledger.provider, ledger.model)
   const bandLabel = band === 'peak'

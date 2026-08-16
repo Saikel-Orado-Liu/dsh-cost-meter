@@ -223,9 +223,12 @@ export function viewSessionCost(state: SessionCostState): SessionCostProjection 
  * @param pricebook - the pricebook read face (in-memory mirror).
  * @returns the definition to register with `ctx.sessionProjections`.
  */
-export function sessionCostProjection(pricebook: PricebookHandle): ProjectionDefinition<'sessionCost', SessionCostState> {
+export function sessionCostProjection<K extends 'sessionCost' | 'sessionCostUsd'>(
+  pricebook: PricebookHandle,
+  key: K,
+): ProjectionDefinition<K, SessionCostState> {
   return {
-    key: 'sessionCost',
+    key,
     schema: projectionSchema,
     init: () => ({ model: null, steps: {}, totals: zeroTotals() }),
     apply: (state, event) => foldSessionCost(state, event, pricebook),

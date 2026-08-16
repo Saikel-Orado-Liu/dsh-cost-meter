@@ -17,6 +17,9 @@ import type { CurrentPricing, PeakPricing, PriceBucket, PricingSnapshot } from '
 /** Official pricing page URL (zh-cn). */
 export const PRICING_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/'
 
+/** Official pricing page URL (en). */
+export const PRICING_URL_EN = 'https://api-docs.deepseek.com/quick_start/pricing/'
+
 /** Official peak-pricing rollout: 2026-08-17 00:00 Beijing time (UTC+8). */
 export const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0)
 
@@ -46,10 +49,31 @@ export const FALLBACK_PEAK: PeakPricing = {
   },
 }
 
+/** Built-in fallback USD prices from the English pricing page. */
+export const FALLBACK_CURRENT_USD: CurrentPricing = {
+  flash: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+  pro: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+}
+
+/** Built-in fallback USD peak table from the English pricing page. */
+export const FALLBACK_PEAK_USD: PeakPricing = {
+  flash: {
+    offPeak: { ...FALLBACK_CURRENT_USD.flash },
+    peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
+  },
+  pro: {
+    offPeak: { ...FALLBACK_CURRENT_USD.pro },
+    peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
+  },
+}
+
 /** Number regex: `0.02`, `1`, `2`, `3.0` etc. Deliberately non-global: a
  * shared global regex leaks `lastIndex` across `exec` calls and would skip
  * the second price cell (the pro price). */
 const PRICE_RE = /(\d+(?:\.\d+)?)\s*元/
+
+/** English price regex: matches `$0.02`, `$0.002`, `0.02` etc. */
+const PRICE_RE_EN = /\$?\s*(\d+(?:\.\d+)?)/
 
 /** Strip HTML tags to plain text (keeps cell order). */
 export function stripHtml(html: string): string {
@@ -74,6 +98,19 @@ function parsePriceCell(text: string): number | undefined {
 }
 
 /** The second price cell of a row (the pro price), stripped of the first. */
+
+/** Parse one English price cell text like `$0.02` into a number. */
+function parsePriceCellUsd(text: string): number | undefined {
+  const match = PRICE_RE_EN.exec(text)
+  if (match === null) return undefined
+  const value = Number(match[1])
+  return Number.isFinite(value) ? value : undefined
+}
+
+/** The second price cell of an English row, stripped of the first. */
+function secondPriceCellUsd(text: string): string {
+  return text.replace(/^\s*\$?\s*(\d+(?:\.\d+)?)/, '')
+}
 function secondPriceCell(text: string): string {
   return text.replace(/^\s*(\d+(?:\.\d+)?元)/, '')
 }
@@ -153,6 +190,80 @@ export function parsePeakTable(html: string): PeakPricing | undefined {
 }
 
 /**
+ * Parse the English current single-price table.
+ * @param html - the raw English pricing page.
+ * @returns the parsed table, or undefined when the labels are absent.
+ */
+/**
+ * Parse the English combined pricing table. The English page lists all three
+ * buckets as rows with OFF-PEAK and PEAK cells, so we extract both the current
+ * off-peak list and the peak table from the same markup.
+ */
+function parseEnglishPricing(html: string): { current: CurrentPricing; peak: PeakPricing } | undefined {
+  const text = stripHtml(html)
+  const hit = /1M INPUT TOKENS \(CACHE HIT\)\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+1M INPUT TOKENS \(CACHE MISS\)\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+1M OUTPUT TOKENS\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)/i.exec(text)
+  if (hit === null) return undefined
+  const n = (index: number): number => Number(hit[index])
+  const current: CurrentPricing = {
+    flash: {
+      cacheReadPerMillion: n(1),
+      inputPerMillion: n(5),
+      outputPerMillion: n(9),
+    },
+    pro: {
+      cacheReadPerMillion: n(2),
+      inputPerMillion: n(6),
+      outputPerMillion: n(10),
+    },
+  }
+  const peak: PeakPricing = {
+    flash: {
+      offPeak: {
+        cacheReadPerMillion: n(1),
+        inputPerMillion: n(5),
+        outputPerMillion: n(9),
+      },
+      peak: {
+        cacheReadPerMillion: n(3),
+        inputPerMillion: n(7),
+        outputPerMillion: n(11),
+      },
+    },
+    pro: {
+      offPeak: {
+        cacheReadPerMillion: n(2),
+        inputPerMillion: n(6),
+        outputPerMillion: n(10),
+      },
+      peak: {
+        cacheReadPerMillion: n(4),
+        inputPerMillion: n(8),
+        outputPerMillion: n(12),
+      },
+    },
+  }
+  return { current, peak }
+}
+
+/**
+ * Parse the English current single-price table.
+ * @param html - the raw English pricing page.
+ * @returns the parsed table, or undefined when the labels are absent.
+ */
+export function parseCurrentTableEn(html: string): CurrentPricing | undefined {
+  return parseEnglishPricing(html)?.current
+}
+
+/**
+ * Parse the English upcoming peak-pricing table.
+ * @param html - the raw English pricing page.
+ * @returns the parsed table, or undefined when either model row is absent.
+ */
+export function parsePeakTableEn(html: string): PeakPricing | undefined {
+  return parseEnglishPricing(html)?.peak
+}
+
+/**
  * Fetch and parse the official pricing page.
  * @param fetchImpl - fetch-compatible function (injected for testability).
  * @param timeoutMs - abort timeout.
@@ -161,30 +272,38 @@ export function parsePeakTable(html: string): PeakPricing | undefined {
 export async function fetchPricing(
   fetchImpl: typeof fetch = globalThis.fetch,
   timeoutMs = 15_000,
+  locale: 'zh' | 'en' = 'zh',
 ): Promise<PricingSnapshot> {
   const fetchedAt = Date.now()
+  const currency = locale === 'en' ? 'USD' : 'CNY'
+  const url = locale === 'en' ? PRICING_URL_EN : PRICING_URL
+  const parseCurrent = locale === 'en' ? parseCurrentTableEn : parseCurrentTable
+  const parsePeak = locale === 'en' ? parsePeakTableEn : parsePeakTable
+  const fallbackCurrent = locale === 'en' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT
+  const fallbackPeak = locale === 'en' ? FALLBACK_PEAK_USD : FALLBACK_PEAK
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
     let response: Response
     try {
-      response = await fetchImpl(PRICING_URL, { signal: controller.signal })
+      response = await fetchImpl(url, { signal: controller.signal })
     } finally {
       clearTimeout(timer)
     }
     if (!response.ok) {
-      return { fetchedAt, current: FALLBACK_CURRENT, peakActive: false, effective: FALLBACK_CURRENT, error: `pricing page HTTP ${response.status}` }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, error: `pricing page HTTP ${response.status}` }
     }
     const html = await response.text()
-    const current = parseCurrentTable(html)
+    const current = parseCurrent(html)
     if (current === undefined) {
-      return { fetchedAt, current: FALLBACK_CURRENT, peakActive: false, effective: FALLBACK_CURRENT, error: 'pricing table not found' }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, error: 'pricing table not found' }
     }
-    const peak = parsePeakTable(html)
+    const peak = parsePeak(html)
     const now = Date.now()
     const peakActive = now >= PEAK_PRICING_START_MS
     return {
       fetchedAt,
+      currency,
       current,
       ...(peak === undefined ? {} : { peak }),
       peakActive,
@@ -194,9 +313,10 @@ export async function fetchPricing(
   } catch (error) {
     return {
       fetchedAt,
-      current: FALLBACK_CURRENT,
+      currency,
+      current: fallbackCurrent,
       peakActive: false,
-      effective: FALLBACK_CURRENT,
+      effective: fallbackCurrent,
       error: error instanceof Error ? error.message : String(error)
     }
   }
