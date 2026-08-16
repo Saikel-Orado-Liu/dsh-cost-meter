@@ -62,9 +62,10 @@ export function stepOf(
 
 export const AssistantCostChip = memo(function AssistantCostChip({ messageId, useSession, useProjection, t }: AssistantCostChipProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
-  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
   const step = useSession(snapshot => stepOfMessage(snapshot, messageId))
-  const cost = useProjection(projectionKey)
+  const costCny = useProjection('sessionCost')
+  const costUsd = useProjection('sessionCostUsd')
+  const cost = currency === 'USD' ? costUsd : costCny
   const ledger = step === null ? undefined : stepOf(cost?.steps, step.turn, step.step)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
 

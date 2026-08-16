@@ -79,8 +79,9 @@ export function costDetail(cost: SessionCostProjection | undefined, model: strin
 
 export const SessionCostLine = memo(function SessionCostLine({ useProjection, sessionId, t }: SessionCostLineProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
-  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
-  const cost = useProjection(projectionKey)
+  const costCny = useProjection('sessionCost')
+  const costUsd = useProjection('sessionCostUsd')
+  const cost = currency === 'USD' ? costUsd : costCny
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
   const [failed, setFailed] = useState(false)
   useEffect(() => {

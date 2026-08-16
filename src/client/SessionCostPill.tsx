@@ -63,8 +63,9 @@ function useDismissOutside(open: boolean, onDismiss: () => void, anchor: RefObje
 
 export const SessionCostPill = memo(function SessionCostPill({ useSession, useProjection, sessionId, t }: SessionCostPillProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
-  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
-  const cost = useProjection(projectionKey)
+  const costCny = useProjection('sessionCost')
+  const costUsd = useProjection('sessionCostUsd')
+  const cost = currency === 'USD' ? costUsd : costCny
   const pressure = useProjection('contextPressure')
   const running = useSession(runningOf)
   const partial = useSession(snapshot => snapshot.partial)

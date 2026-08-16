@@ -30,8 +30,9 @@ function reasonText(step: SessionCostStep, t: CostViewLocale): string {
 
 export const CostView = memo(function CostView({ useProjection, sessionId, t }: CostViewProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
-  const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
-  const cost = useProjection(projectionKey)
+  const costCny = useProjection('sessionCost')
+  const costUsd = useProjection('sessionCostUsd')
+  const cost = currency === 'USD' ? costUsd : costCny
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
   const symbol = currencySymbol(currency)
 
