@@ -110,11 +110,11 @@ export function snapshotAt(snapshots: readonly PricebookSnapshot[], time: number
 
 /** Resolve one model's price entry in a snapshot through the key chain. */
 export function modelPriceOf(
-  snapshot: PricebookSnapshot | undefined,
+  snapshot: PricebookSnapshot | null | undefined,
   provider: string | undefined,
   model: string,
 ): ModelPrice | undefined {
-  if (snapshot === undefined) return undefined
+  if (snapshot === undefined || snapshot === null) return undefined
   for (const key of modelKeys(provider, model)) {
     const entry = snapshot.prices[key]
     if (entry !== undefined) return entry
@@ -132,6 +132,33 @@ export function bucketAt(
   const entry = modelPriceOf(snapshot, provider, model)
   if (entry === undefined) return undefined
   return bucketOf(entry, bandForTime(time))
+}
+
+/**
+ * The peak-to-off-peak price multiplier for one model's entry, when the
+ * entry carries both bands. The multiplier is the ratio of the summed peak
+ * bucket rates to the summed off-peak bucket rates; official DeepSeek prices
+ * scale all buckets by the same factor, so this is a stable “peak is N× the
+ * off-peak price” display value.
+ * @param snapshot - the pricebook snapshot to read.
+ * @param provider - the provider route, when known.
+ * @param model - the model id.
+ * @returns the peak/off-peak multiplier, or null when either band is absent.
+ */
+export function peakOffPeakMultiplier(
+  snapshot: PricebookSnapshot | null | undefined,
+  provider: string | undefined,
+  model: string,
+): number | null {
+  const entry = modelPriceOf(snapshot, provider, model)
+  if (entry === undefined) return null
+  const peak = entry.peak
+  const offPeak = entry.offPeak
+  if (peak === undefined || offPeak === undefined) return null
+  const offPeakTotal = offPeak.cacheReadPerMillion + offPeak.inputPerMillion + offPeak.outputPerMillion
+  if (offPeakTotal === 0) return null
+  const peakTotal = peak.cacheReadPerMillion + peak.inputPerMillion + peak.outputPerMillion
+  return peakTotal / offPeakTotal
 }
 
 /** CJK characters (the /1.5 density class). */

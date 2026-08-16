@@ -20,8 +20,8 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the contextPressure key into SessionProjectionMap.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import type { ConversationCostResponse, SessionCostProjection } from '../types.ts'
-import { blocksOutputTokens, bucketAt, cacheReadRatioOf, combineTotals, estimateCost, subagentSpend } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatTime } from './format.ts'
+import { bandForTime, blocksOutputTokens, bucketAt, cacheReadRatioOf, combineTotals, estimateCost, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
+import { currencySymbol, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import { ENDPOINT, REFRESH_MS } from './SessionCostLine.tsx'
 import css from './SessionCostPill.module.css'
 
@@ -128,6 +128,14 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const sourceKey = snapshot?.source ?? null
   const source = sourceKey === null ? t('source.none') : t(`source.${sourceKey}` as 'source.manual')
 
+  const band = bandForTime(Date.now())
+  const peakRatio = peakOffPeakMultiplier(snapshot ?? undefined, model?.provider, model?.model ?? 'unknown')
+  const bandLabel = band === 'peak'
+    ? peakRatio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(peakRatio) })
+    : band === 'offPeak'
+      ? peakRatio === null ? t('band.offPeak') : t('price.offPeakRatio', { multiplier: formatMultiplier(1 / peakRatio) })
+      : null
+
   return (
     <div className={css.wrap} ref={wrapRef}>
       <button
@@ -135,15 +143,20 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
         className={css.pill}
         data-testid="cost-pill"
         data-running={estimate !== null}
+        data-band={band === 'single' ? undefined : band}
         onClick={() => setOpen(prev => !prev)}
         aria-expanded={open}
       >
         {label}
+        {bandLabel !== null && <span className={css.bandBadge} data-testid="cost-pill-band">{bandLabel}</span>}
         {estimate !== null && <span className={css.estimateNote}>· {t('pill.estimateNote')}</span>}
       </button>
       {open && (
         <div className={css.detail} data-testid="cost-pill-detail">
           <div className={css.detailRow + ' ' + css.detailTotal}>{t('pill.detail.total', { amount: `${symbol}${formatMoney(total)}` })}</div>
+            {bandLabel !== null && (
+              <div className={css.detailRow + ' ' + css.detailRowSecondary} data-testid="cost-pill-detail-band">{bandLabel}</div>
+            )}
           {combined !== undefined && combined.pricedSteps > 0 && (
             <>
               <div className={css.detailRow + ' ' + css.detailRowSecondary}>{t('view.uncached')}: {symbol}{formatMoney(combined.uncachedCost)}</div>

@@ -48,6 +48,10 @@ export const zh = {
   'band.peak': '高峰价',
   'band.offPeak': '闲时价',
   'band.single': '单价',
+  'price.peakExtra': '高峰 · 比闲时多 {multiplier} 倍',
+  'price.offPeakSaving': '闲时 · 比高峰省 {percent}',
+  'price.peakRatio': '高峰 {multiplier}',
+  'price.offPeakRatio': '闲时 {multiplier}',
 
   // Chip
   'chip.title': '本回复花费 {amount}',
@@ -123,6 +127,10 @@ export const en: Record<ConversationCostKey, string> = {
   'band.peak': 'peak',
   'band.offPeak': 'off-peak',
   'band.single': 'list',
+  'price.peakExtra': 'peak · {multiplier}× more than off-peak',
+  'price.offPeakSaving': 'off-peak · save {percent} vs peak',
+  'price.peakRatio': 'peak {multiplier}',
+  'price.offPeakRatio': 'off-peak {multiplier}',
 
   'chip.title': 'This reply cost {amount}',
   'chip.unpriced': '—',

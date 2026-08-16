@@ -39,3 +39,20 @@ export function formatMoney(value: number): string {
 export function formatTime(epochMs: number): string {
   return new Date(epochMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
+
+/**
+ * Compact price multiplier, e.g. `2.0×` or `0.5×`.
+ * @param multiplier - the ratio to display.
+ * @returns the fixed one-decimal multiplier string.
+ */
+export function formatMultiplier(multiplier: number): string {
+  return `${multiplier.toFixed(1)}×`
+}
+/**
+ * Compact percentage, e.g. `50%`.
+ * @param fraction - the ratio in [0, 1].
+ * @returns the whole-percent string.
+ */
+export function formatPercent(fraction: number): string {
+  return `${Math.round(fraction * 100)}%`
+}

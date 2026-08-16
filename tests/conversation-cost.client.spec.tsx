@@ -21,9 +21,10 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../src/types.ts'
 import { AssistantCostChip, stepOf, stepOfMessage } from '../src/client/AssistantCostChip.tsx'
-import { cacheReadRatioOf, estimateCost, estimateTokens } from '../src/client/cost-math.ts'
+import { cacheReadRatioOf, estimateCost, estimateTokens, peakOffPeakMultiplier } from '../src/client/cost-math.ts'
 import { CostPluginCard } from '../src/client/CostPluginCard.tsx'
-import { currencySymbol, formatMoney } from '../src/client/format.ts'
+import { CostView } from '../src/client/CostView.tsx'
+import { currencySymbol, formatMoney, formatMultiplier, formatPercent } from '../src/client/format.ts'
 import { SessionCostLine, ENDPOINT } from '../src/client/SessionCostLine.tsx'
 import { SessionCostPill } from '../src/client/SessionCostPill.tsx'
 
@@ -130,6 +131,10 @@ function zhT(key: string, params?: Record<string, string>): string {
     'band.peak': '高峰价',
     'band.offPeak': '闲时价',
     'band.single': '单价',
+    'price.peakExtra': '高峰 · 比闲时多 {multiplier} 倍',
+    'price.offPeakSaving': '闲时 · 比高峰省 {percent}',
+    'price.peakRatio': '高峰 {multiplier}',
+    'price.offPeakRatio': '闲时 {multiplier}',
     'chip.title': '本回复花费 {amount}',
     'chip.unpriced': '—',
     'refreshedAt': '更新于 {time}',
@@ -226,6 +231,26 @@ describe('estimate helpers', () => {
     // Without subagents the combined totals are the main totals by reference.
     expect(combineTotals(main, undefined)).toBe(main)
     expect(combineTotals(undefined, [SUBAGENT])).toBeUndefined()
+  })
+})
+
+describe('peakOffPeakMultiplier and formatMultiplier', () => {
+  it('computes the peak/off-peak ratio from a model entry', () => {
+    const snapshot = RESPONSE.pricebook.current
+    expect(peakOffPeakMultiplier(snapshot, 'deepseek-official', 'deepseek-v4-flash')).toBeCloseTo(2)
+    // A missing model or missing bands yields no multiplier.
+    expect(peakOffPeakMultiplier(snapshot, 'openrouter', 'unknown-model')).toBeNull()
+    expect(peakOffPeakMultiplier(undefined, 'deepseek-official', 'deepseek-v4-flash')).toBeNull()
+  })
+
+  it('formats multipliers with one decimal', () => {
+    expect(formatMultiplier(2)).toBe('2.0×')
+    expect(formatMultiplier(0.5)).toBe('0.5×')
+  })
+
+  it('formats percentages as whole percents', () => {
+    expect(formatPercent(0.5)).toBe('50%')
+    expect(formatPercent(0.25)).toBe('25%')
   })
 })
 
@@ -343,16 +368,18 @@ describe('SessionCostLine', () => {
 
 describe('AssistantCostChip', () => {
   it('renders the anchored per-reply cost', () => {
+    stubFetch(RESPONSE)
     render(<AssistantCostChip
       messageId={'m1' as never}
       useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
       useProjection={() => PROJECTION as never}
       t={zhT}
     />)
-    expect(screen.getByTestId('cost-chip').textContent).toBe('¥3.02')
+    expect(screen.getByTestId('cost-chip').textContent).toContain('¥3.02')
   })
 
   it('renders the dash for an unpriced reply', () => {
+    stubFetch(RESPONSE)
     const unpriced = {
       ...PROJECTION,
       steps: [{ ...PROJECTION.steps[0], priced: false, cost: null, unpricedReason: 'NO_PRICE' as const }],
@@ -368,6 +395,7 @@ describe('AssistantCostChip', () => {
   })
 
   it('renders nothing when the message is out of window', () => {
+    stubFetch(RESPONSE)
     render(<AssistantCostChip
       messageId={'m1' as never}
       useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
@@ -377,41 +405,142 @@ describe('AssistantCostChip', () => {
     expect(screen.queryByTestId('cost-chip')).toBeNull()
     expect(screen.queryByTestId('cost-chip-unpriced')).toBeNull()
   })
+
+  it('marks the per-reply cost chip red with the peak extra multiplier', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<AssistantCostChip
+        messageId={'m1' as never}
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        t={zhT}
+      />)
+      await screen.findByText(/2.0×/)
+      const badge = screen.getByTestId('cost-chip-band')
+      expect(badge.getAttribute('data-band')).toBe('peak')
+      expect(badge.textContent).toContain('高峰')
+      expect(badge.textContent).toContain('2.0×')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks the per-reply cost chip green with the off-peak saving', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<AssistantCostChip
+        messageId={'m1' as never}
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        t={zhT}
+      />)
+      await screen.findByText(/0.5×/)
+      const badge = screen.getByTestId('cost-chip-band')
+      expect(badge.getAttribute('data-band')).toBe('offPeak')
+      expect(badge.textContent).toContain('闲时')
+      expect(badge.textContent).toContain('0.5×')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('SessionCostPill', () => {
   it('shows the exact anchored total while idle', async () => {
-    stubFetch(RESPONSE)
-    render(<SessionCostPill
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
-      useProjection={() => PROJECTION as never}
-      sessionId={"s1" as never}
-      t={zhT}
-    />)
-    await screen.findByText('本对话 ¥3.02')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-16T12:00:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<SessionCostPill
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(screen.getByText('本对话 ¥3.02')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('shows the streaming estimate while running', async () => {
-    stubFetch(RESPONSE)
-    const running = { ...snapshotWithNodes([assistantNode('m1')]), running: true, partial: { turn: 2, step: 1, blocks: [{ kind: 'text', text: '你好世界 hello' }] } }
-    const useProjection = (key: string): unknown => {
-      if (key === 'sessionCost') return PROJECTION
-      if (key === 'contextPressure') return { pressureTokens: 1_000_000, projectedTokens: 1_100_000 }
-      return undefined
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-16T12:00:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      const running = {
+        running: true,
+        partial: { turn: 2, step: 1, blocks: [{ kind: 'text', text: '你好世界 hello' }] },
+        chat: { legacy: { nodes: [assistantNode('m1')] } },
+      } as never
+      const useProjection = (key: string): unknown => {
+        if (key === 'sessionCost') return PROJECTION
+        if (key === 'contextPressure') return { pressureTokens: 1_000_000, projectedTokens: 1_100_000 }
+        return undefined
+      }
+      render(<SessionCostPill
+        useSession={((selector: (s: never) => unknown) => selector(running as never)) as never}
+        useProjection={useProjection as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      // 4 CJK ÷ 1.5 = 2.67→3 + 5 ASCII ÷ 4 = 1.25→2 → 5 output tokens.
+      // Input 1.1M at 50% cached ratio: 1.1 × (0.5×1 + 0.5×0.02) = 0.561; output 5 × 2/1M ≈ 0.00001 → ≈ 0.561.
+      // The estimate projects the TOTAL after the reply settles: anchored 3.02 + 0.561 ≈ 3.58.
+      const text = await screen.findByText(/预计/)
+      expect(text.textContent).toContain('¥3.58')
+      expect(text.textContent).toContain('进行中')
+      expect(text.textContent).toContain('估算')
+    } finally {
+      vi.useRealTimers()
     }
-    render(<SessionCostPill
-      useSession={((selector: (s: never) => unknown) => selector(running as never)) as never}
-      useProjection={useProjection as never}
-      sessionId={"s1" as never}
-      t={zhT}
-    />)
-    // 4 CJK ÷ 1.5 = 2.67→3 + 5 ASCII ÷ 4 = 1.25→2 → 5 output tokens.
-    // Input 1.1M at 50% cached ratio: 1.1 × (0.5×1 + 0.5×0.02) = 0.561; output 5 × 2/1M ≈ 0.00001 → ≈ 0.561.
-    // The estimate projects the TOTAL after the reply settles: anchored 3.02 + 0.561 ≈ 3.58.
-    const text = await screen.findByText(/预计/)
-    expect(text.textContent).toContain('¥3.58')
-    expect(text.textContent).toContain('进行中')
-    expect(text.textContent).toContain('估算')
+  })
+
+  it('colors the top-right conversation capsule green with the off-peak saving', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<SessionCostPill
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await screen.findByText(/0.5×/)
+      const pill = screen.getByTestId('cost-pill')
+      expect(pill.getAttribute('data-band')).toBe('offPeak')
+      expect(screen.getByTestId('cost-pill-band').textContent).toContain('闲时')
+      expect(screen.getByTestId('cost-pill-band').textContent).toContain('0.5×')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('colors the top-right conversation capsule red with the peak extra multiplier', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<SessionCostPill
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await screen.findByText(/2.0×/)
+      const pill = screen.getByTestId('cost-pill')
+      expect(pill.getAttribute('data-band')).toBe('peak')
+      expect(screen.getByTestId('cost-pill-band').textContent).toContain('高峰')
+      expect(screen.getByTestId('cost-pill-band').textContent).toContain('2.0×')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('toggles the detail panel on click', async () => {
@@ -448,6 +577,52 @@ describe('SessionCostPill', () => {
     expect(screen.getByTestId('cost-pill-detail')).not.toBeNull()
     fireEvent.mouseDown(pill)
     expect(screen.getByTestId('cost-pill-detail')).not.toBeNull()
+  })
+})
+
+describe('CostView', () => {
+  it('marks each reply cost with the peak band and the extra multiplier', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<CostView
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await vi.advanceTimersByTimeAsync(0)
+      const card = screen.getByTestId('cost-step')
+      const badge = screen.getByTestId('cost-step-band')
+      expect(card.getAttribute('data-band')).toBe('peak')
+      expect(badge.getAttribute('data-band')).toBe('peak')
+      expect(badge.textContent).toContain('高峰')
+      expect(badge.textContent).toContain('2.0×')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('marks each reply cost green with the off-peak saving', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
+    try {
+      stubFetch(RESPONSE)
+      render(<CostView
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await vi.advanceTimersByTimeAsync(0)
+      const card = screen.getByTestId('cost-step')
+      const badge = screen.getByTestId('cost-step-band')
+      expect(card.getAttribute('data-band')).toBe('offPeak')
+      expect(badge.getAttribute('data-band')).toBe('offPeak')
+      expect(badge.textContent).toContain('闲时')
+      expect(badge.textContent).toContain('0.5×')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

@@ -11,8 +11,8 @@ import { memo, useEffect, useState } from 'react'
 import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
-import { combineTotals, subagentSpend } from './cost-math.ts'
-import { currencySymbol, formatMoney, formatTime } from './format.ts'
+import { bandForTime, combineTotals, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
+import { currencySymbol, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import css from './CostView.module.css'
 
 export type CostViewLocale = PropsLocale<'fare-meter'>['t']
@@ -97,13 +97,24 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
       <section className={css.steps}>
         <h3 className={css.stepsTitle}>{t('view.steps')}</h3>
         <ol className={css.stepList}>
-          {rows.map((step) => (
-            <li key={`${step.turn}:${step.step}`} className={css.step} data-testid="cost-step">
+          {rows.map((step) => {
+            const stepBand = bandForTime(Date.now())
+            const stepRatio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, step.provider, step.model)
+            const stepBandLabel = stepBand === 'peak'
+              ? stepRatio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(stepRatio) })
+              : stepBand === 'offPeak'
+                ? stepRatio === null ? t('band.offPeak') : t('price.offPeakRatio', { multiplier: formatMultiplier(1 / stepRatio) })
+                : null
+            return (
+            <li key={`${step.turn}:${step.step}`} className={css.step} data-testid="cost-step" data-band={stepBand === 'single' ? undefined : stepBand}>
               <div className={css.stepHead}>
                 <span className={css.stepTurn}>{t('step.turn', { turn: String(step.turn) })}</span>
                 <span className={css.stepModel}>{t('step.model', { model: step.model })}</span>
                 <span className={css.stepTime}>{formatTime(step.time)}</span>
-                <span className={css.stepCost}>{money(step.cost)}</span>
+                <span className={css.stepCost}>
+                  {money(step.cost)}
+                  {stepBandLabel !== null && <span className={css.bandBadge} data-band={stepBand} data-testid="cost-step-band">{stepBandLabel}</span>}
+                </span>
               </div>
               <div className={css.stepBody}>
                 <span className={css.stepTokens}>
@@ -123,7 +134,8 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
                 </span>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       </section>
     </div>

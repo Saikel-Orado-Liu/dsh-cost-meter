@@ -9,14 +9,15 @@
  * snapshot value, never a current-price recompute. Unpriced replies render
  * `—` (the Cost tab explains why).
  */
-import { memo } from 'react'
+import { memo, useEffect, useState } from 'react'
 import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { SessionCostStep } from '../types.ts'
-import { currencySymbol, formatMoney } from './format.ts'
+import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
+import { bandForTime, peakOffPeakMultiplier } from './cost-math.ts'
+import { currencySymbol, formatMoney, formatMultiplier } from './format.ts'
 import css from './AssistantCostChip.module.css'
 
 export type ChipLocale = PropsLocale<'fare-meter'>['t']
@@ -63,6 +64,21 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
   const step = useSession(snapshot => stepOfMessage(snapshot, messageId))
   const cost = useProjection('sessionCost')
   const ledger = step === null ? undefined : stepOf(cost?.steps, step.turn, step.step)
+  const [response, setResponse] = useState<ConversationCostResponse | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    void fetch('/fare-meter', { cache: 'no-store' })
+      .then(res => (res.ok ? res.json() as Promise<ConversationCostResponse> : null))
+      .then((data) => {
+        if (!alive || data === null) return
+        setResponse(data)
+      })
+      .catch(() => { /* the chip keeps the last good pricebook */ })
+    return () => {
+      alive = false
+    }
+  }, [])
 
   if (ledger === undefined || ledger.cost === null) {
     if (ledger === undefined) return null
@@ -74,7 +90,18 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
   }
 
   const amount = `${currencySymbol('CNY')}${formatMoney(ledger.cost)}`
+  const band = bandForTime(Date.now())
+  const ratio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, ledger.provider, ledger.model)
+  const bandLabel = band === 'peak'
+    ? ratio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(ratio) })
+    : band === 'offPeak'
+      ? ratio === null ? t('band.offPeak') : t('price.offPeakRatio', { multiplier: formatMultiplier(1 / ratio) })
+      : null
+
   return (
-    <span className={css.root} data-cost-chip title={t('chip.title', { amount })} data-testid="cost-chip">{amount}</span>
+    <span className={css.root} data-cost-chip title={t('chip.title', { amount })} data-testid="cost-chip">
+      {amount}
+      {bandLabel !== null && <span className={css.bandBadge} data-band={band} data-testid="cost-chip-band">{bandLabel}</span>}
+    </span>
   )
 })

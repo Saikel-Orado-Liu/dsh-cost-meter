@@ -47,6 +47,30 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+.pill[data-band='peak'] {
+  color: var(--dsw-alias-state-error-primary);
+  border-color: var(--dsw-alias-state-error-secondary);
+}
+
+.pill[data-band='offPeak'] {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-secondary);
+}
+
+.bandBadge {
+  font-size: 11px;
+  line-height: 16px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.bandBadge::before {
+  content: '·';
+  margin: 0 4px;
+  color: currentColor;
+  opacity: 0.6;
+}
+
 .estimateNote {
   font-size: 11px;
   opacity: 0.75;

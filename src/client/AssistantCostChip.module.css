@@ -9,6 +9,9 @@
 .root {
   order: 10;
   margin-left: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
   font-size: 14px;
@@ -20,6 +23,28 @@
   content: '·';
   margin-right: 10px;
   color: var(--dsw-alias-separator-primary);
+}
+
+.bandBadge {
+  font-size: 12px;
+  line-height: 18px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.bandBadge[data-band='peak'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.bandBadge[data-band='offPeak'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.bandBadge::before {
+  content: '·';
+  margin: 0 4px;
+  color: currentColor;
+  opacity: 0.6;
 }
 
 .unpriced {
