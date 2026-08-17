@@ -94,13 +94,14 @@ export function apply(ctx: ClientContext): void {
   )
 
   // Plugin configuration card (设置 → 插件), standard plugin-card shape over
-  // the `cost-meter` settings namespace.
+  // the `cost-meter` settings namespace. The slot is keyed by the settings
+  // namespace the card edits, so the tab pairs this card with the Host-served
+  // `cost-meter` namespace.
   ctx.slots.inject(
     'settings.plugin.item',
     () => ctx.slots.register({
       name: 'settings.plugin.item',
-      id: 'cost-meter',
-      order: 30,
+      key: SETTINGS_NAMESPACE,
       locale: NS,
       inject: () => ({ scope }),
     }, CostPluginCard),
