@@ -27,7 +27,7 @@ import {
   snapshotForTime,
   stepCost,
 } from '../src/pricebook.ts'
-import { FALLBACK_CURRENT, FALLBACK_PEAK, PEAK_PRICING_START_MS } from '../src/pricing.ts'
+import { FALLBACK_CURRENT, FALLBACK_PEAK, PEAK_PRICING_START_MS, PEAK_SCHEDULE_EN, PEAK_SCHEDULE_ZH } from '../src/pricing.ts'
 import type {
   CurrentPricing,
   ModelPrice,
@@ -54,6 +54,7 @@ const OFFICIAL: PricingSnapshot = {
   peak: FALLBACK_PEAK,
   peakActive: true,
   effective: FALLBACK_CURRENT,
+  schedule: PEAK_SCHEDULE_ZH,
 }
 
 function snapshotFixture(version: number, effectiveAt: number, prices: Record<string, ModelPrice>): PricebookSnapshot {
@@ -93,6 +94,18 @@ describe('bandForTime', () => {
   it('uses peak/offPeak after the rollout by Beijing hour', () => {
     expect(bandForTime(POST_PEAK)).toBe('peak')
     expect(bandForTime(POST_OFFPEAK)).toBe('offPeak')
+  })
+
+  it('classifies against a custom schedule (the en page may differ from zh)', () => {
+    const utcSchedule = { timezone: 'UTC', ranges: [[0, 6]] as const }
+    // 05:30 UTC: peak under the UTC schedule, off-peak (13:30 Beijing) under zh.
+    const at0530 = Date.UTC(2026, 7, 17, 5, 30, 0)
+    expect(bandForTime(at0530, utcSchedule)).toBe('peak')
+    expect(bandForTime(at0530)).toBe('offPeak')
+    // 07:00 UTC: off-peak under the UTC schedule, peak (15:00 Beijing) under zh.
+    const at0700 = Date.UTC(2026, 7, 17, 7, 0, 0)
+    expect(bandForTime(at0700, utcSchedule)).toBe('offPeak')
+    expect(bandForTime(at0700)).toBe('peak')
   })
 })
 
@@ -370,6 +383,28 @@ describe('PricebookHandle refresh and mutation', () => {
     handle.applySettings({})
     expect(handle.state.balanceEnabled).toBe(false)
     expect(() => handle.applySettings({ overrides: 'nonsense' as never })).not.toThrow()
+  })
+
+  it('carries the USD pricebook its own (en) schedule and bands against it', async () => {
+    const enOfficial: PricingSnapshot = {
+      ...OFFICIAL,
+      currency: 'USD',
+      schedule: { timezone: 'UTC', ranges: [[0, 6]] as const },
+    }
+    const handle = new PricebookHandle({} as Context, {
+      fxApiUrl: 'https://fx.invalid',
+      defaultFxRate: DEFAULT_FX_RATE,
+      openRouterModelsUrl: 'https://or.invalid',
+      openRouterEnabled: true,
+      snapshotHistoryLimit: 50,
+    }, { ...initialPricebookState(), snapshots: [snapshotFixture(1, 0, { pro: { source: 'official', single: FALLBACK_CURRENT.pro, offPeak: FALLBACK_PEAK.pro.offPeak, peak: FALLBACK_PEAK.pro.peak } })] }, 'USD')
+    await handle.refresh({ official: enOfficial })
+    expect(handle.view().schedule).toEqual({ timezone: 'UTC', ranges: [[0, 6]] })
+    // 05:30 UTC: peak under the en (UTC) schedule, off-peak under the zh default.
+    const at0530 = Date.UTC(2026, 7, 17, 5, 30, 0)
+    expect(handle.priceFor('deepseek-official', 'deepseek-v4-pro', at0530)?.band).toBe('peak')
+    // The zh default would have said offPeak (13:30 Beijing).
+    expect(bandForTime(at0530)).toBe('offPeak')
   })
 })
 

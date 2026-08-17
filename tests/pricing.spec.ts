@@ -13,8 +13,11 @@ import {
   isPeakHour,
   parseCurrentTable,
   parseCurrentTableEn,
+  parsePeakSchedule,
   parsePeakTable,
   parsePeakTableEn,
+  PEAK_SCHEDULE_EN,
+  PEAK_SCHEDULE_ZH,
   PRICING_URL_EN,
 } from '../src/pricing.ts'
 
@@ -22,6 +25,7 @@ import {
 const PAGE_HTML = `
 <html><body>
 <h1>模型 &amp; 价格</h1>
+<p>高峰时段：每日 09:00-12:00、14:00-18:00（北京时间）</p>
 <table>
 <tr><td>模型</td><td>deepseek-v4-flash</td><td>deepseek-v4-pro</td></tr>
 <tr><td>百万tokens输入（缓存命中）</td><td>0.02元</td><td>0.025元</td></tr>
@@ -41,6 +45,7 @@ const PAGE_HTML = `
 const PAGE_HTML_EN = `
 <html><body>
 <h1>Models &amp; Pricing</h1>
+<p>Peak hours: 09:00-12:00 and 14:00-18:00 (Beijing Time, UTC+8)</p>
 <table>
 <tr><td colspan="3">PRICING</td><td>OFF-PEAK</td><td>PEAK</td></tr>
 <tr><td rowspan="2">1M INPUT TOKENS (CACHE HIT)</td><td>OFF-PEAK</td><td>$0.007</td><td>$0.022</td></tr>
@@ -113,6 +118,26 @@ describe('parsePeakTableEn', () => {
   })
 })
 
+describe('parsePeakSchedule', () => {
+  it('parses the zh windows and the Beijing timezone', () => {
+    expect(parsePeakSchedule(PAGE_HTML, 'zh')).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+  })
+
+  it('parses the en windows; a Beijing/UTC+8 mention wins over bare UTC', () => {
+    expect(parsePeakSchedule(PAGE_HTML_EN, 'en')).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+  })
+
+  it('parses a UTC-stated English schedule into the UTC timezone', () => {
+    const html = '<p>Peak hours: 01:00-04:00 and 06:00-10:00 (UTC)</p>'
+    expect(parsePeakSchedule(html, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
+  })
+
+  it('returns undefined when the page carries no schedule', () => {
+    expect(parsePeakSchedule('<html>no schedule here</html>', 'zh')).toBeUndefined()
+    expect(parsePeakSchedule(PAGE_HTML, 'en')).toBeUndefined()
+  })
+})
+
 describe('fetchPricing', () => {
   it('folds a healthy page into a snapshot with effective prices', async () => {
     const fetchImpl = async () => ({
@@ -124,6 +149,7 @@ describe('fetchPricing', () => {
     expect(snapshot.current.flash).toEqual(FALLBACK_CURRENT.flash)
     expect(snapshot.peak?.pro.peak.outputPerMillion).toBe(27)
     expect(snapshot.error).toBeUndefined()
+    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_ZH)
   })
 
   it('folds the English page into a USD snapshot when locale is en', async () => {
@@ -136,6 +162,7 @@ describe('fetchPricing', () => {
     expect(snapshot.currency).toBe('USD')
     expect(snapshot.current.flash.inputPerMillion).toBe(0.22)
     expect(snapshot.peak?.flash.peak.inputPerMillion).toBe(0.44)
+    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_EN)
     expect(fetchImpl).toHaveBeenCalledWith(PRICING_URL_EN, expect.anything())
   })
 
@@ -144,6 +171,7 @@ describe('fetchPricing', () => {
     const snapshot = await fetchPricing(fetchImpl)
     expect(snapshot.current).toEqual(FALLBACK_CURRENT)
     expect(snapshot.error).toContain('ECONNREFUSED')
+    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_ZH)
   })
 
   it('uses the USD built-in fallback when the English page is unreachable', async () => {
@@ -152,6 +180,7 @@ describe('fetchPricing', () => {
     expect(snapshot.currency).toBe('USD')
     expect(snapshot.current).toEqual(FALLBACK_CURRENT_USD)
     expect(snapshot.error).toContain('ECONNREFUSED')
+    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_EN)
   })
 
   it('degrades to the built-in list when the table is unparsable', async () => {
@@ -182,6 +211,17 @@ describe('isPeakHour', () => {
     expect(isPeakHour(at(13))).toBe(false)
     expect(isPeakHour(at(18))).toBe(false)
     expect(isPeakHour(at(23))).toBe(false)
+  })
+
+  it('classifies against a custom (locale) schedule instead of the zh default', () => {
+    // A schedule genuinely different from the zh default: 00:00-06:00 UTC.
+    const utcSchedule = { timezone: 'UTC', ranges: [[0, 6]] as const }
+    // 05:30 UTC is peak under the UTC schedule but 13:30 Beijing is off-peak.
+    expect(isPeakHour(new Date('2026-08-17T05:30:00Z'), utcSchedule)).toBe(true)
+    expect(isPeakHour(new Date('2026-08-17T05:30:00Z'))).toBe(false)
+    // 07:00 UTC is off-peak under the UTC schedule but 15:00 Beijing is peak.
+    expect(isPeakHour(new Date('2026-08-17T07:00:00Z'), utcSchedule)).toBe(false)
+    expect(isPeakHour(new Date('2026-08-17T07:00:00Z'))).toBe(true)
   })
 })
 

@@ -40,6 +40,13 @@ const OK_BALANCE: Extract<BalanceSnapshot, { ok: true }> = {
   fetchedAt: 1_780_000_000_000,
 }
 
+/** 2026-08-17 10:00 Beijing (post-rollout peak hour). */
+const POST_PEAK_MS = Date.UTC(2026, 7, 17, 2, 0, 0)
+/** 2026-08-17 20:00 Beijing (post-rollout off-peak hour). */
+const POST_OFFPEAK_MS = Date.UTC(2026, 7, 17, 12, 0, 0)
+/** The zh default schedule (the schedule of the CNY pricebook page). */
+const ZH_SCHEDULE = { timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] as const }
+
 const PROJECTION: SessionCostProjection = {
   model: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   steps: [
@@ -80,6 +87,7 @@ const RESPONSE: ConversationCostResponse = {
     balanceEnabled: true,
     openRouterEnabled: true,
     fetchedAt: 1_780_000_000_000,
+    schedule: ZH_SCHEDULE,
   },
   subagents: [],
 }
@@ -408,15 +416,21 @@ describe('AssistantCostChip', () => {
     expect(screen.queryByTestId('cost-chip-unpriced')).toBeNull()
   })
 
-  it('marks the per-reply cost chip red with the peak extra multiplier', async () => {
+  it('marks the per-reply cost chip red with the peak extra multiplier of the ROUND', async () => {
+    // The badge follows the round's OWN time (the anchored ledger band),
+    // not the wall clock: the ledger says peak while "now" is off-peak.
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
+    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
     try {
       stubFetch(RESPONSE)
+      const peakLedger = {
+        ...PROJECTION,
+        steps: [{ ...PROJECTION.steps[0], time: POST_PEAK_MS, band: 'peak' as const }],
+      }
       render(<AssistantCostChip
         messageId={'m1' as never}
         useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
-        useProjection={() => PROJECTION as never}
+        useProjection={() => peakLedger as never}
         t={zhT}
       />)
       await screen.findByText(/2.0×/)
@@ -429,15 +443,20 @@ describe('AssistantCostChip', () => {
     }
   })
 
-  it('marks the per-reply cost chip green with the off-peak saving', async () => {
+  it('marks the per-reply cost chip green with the off-peak saving of the ROUND', async () => {
+    // The ledger says off-peak even while the wall clock is in a peak hour.
     vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
+    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
     try {
       stubFetch(RESPONSE)
+      const offPeakLedger = {
+        ...PROJECTION,
+        steps: [{ ...PROJECTION.steps[0], time: POST_OFFPEAK_MS, band: 'offPeak' as const }],
+      }
       render(<AssistantCostChip
         messageId={'m1' as never}
         useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
-        useProjection={() => PROJECTION as never}
+        useProjection={() => offPeakLedger as never}
         t={zhT}
       />)
       await screen.findByText(/0.5×/)
@@ -545,6 +564,29 @@ describe('SessionCostPill', () => {
     }
   })
 
+  it('colors the capsule by the pricebook schedule (the en page may differ from zh)', async () => {
+    // UTC 00:30 is peak under the response's UTC schedule but off-peak
+    // (08:30 Beijing) under the zh default — the live band must follow the
+    // schedule of the pricebook being displayed.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-17T00:30:00Z'))
+    try {
+      stubFetch({ ...RESPONSE, pricebook: { ...RESPONSE.pricebook, schedule: { timezone: 'UTC', ranges: [[0, 1]] as const } } })
+      render(<SessionCostPill
+        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useProjection={() => PROJECTION as never}
+        sessionId={"s1" as never}
+        t={zhT}
+      />)
+      await screen.findByText(/2.0×/)
+      const pill = screen.getByTestId('cost-pill')
+      expect(pill.getAttribute('data-band')).toBe('peak')
+      expect(screen.getByTestId('cost-pill-band').textContent).toContain('高峰')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('toggles the detail panel on click', async () => {
     stubFetch(RESPONSE)
     render(<SessionCostPill
@@ -583,13 +625,19 @@ describe('SessionCostPill', () => {
 })
 
 describe('CostView', () => {
-  it('marks each reply cost with the peak band and the extra multiplier', async () => {
+  it('marks each reply card with the peak band of the ROUND, not the clock now', async () => {
+    // The step happened in a peak hour but "now" (the wall clock) is an
+    // off-peak hour — the card must stay red (peak), anchored to the round.
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
+    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
     try {
       stubFetch(RESPONSE)
+      const peakLedger = {
+        ...PROJECTION,
+        steps: [{ ...PROJECTION.steps[0], time: POST_PEAK_MS, band: 'peak' as const }],
+      }
       render(<CostView
-        useProjection={() => PROJECTION as never}
+        useProjection={() => peakLedger as never}
         sessionId={"s1" as never}
         t={zhT}
       />)
@@ -605,13 +653,19 @@ describe('CostView', () => {
     }
   })
 
-  it('marks each reply cost green with the off-peak saving', async () => {
+  it('keeps an off-peak reply green even while the clock is in a peak hour', async () => {
+    // The step happened in an off-peak hour but "now" is a peak hour — the
+    // card must stay green (off-peak), anchored to the round.
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
+    vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
     try {
       stubFetch(RESPONSE)
+      const offPeakLedger = {
+        ...PROJECTION,
+        steps: [{ ...PROJECTION.steps[0], time: POST_OFFPEAK_MS, band: 'offPeak' as const }],
+      }
       render(<CostView
-        useProjection={() => PROJECTION as never}
+        useProjection={() => offPeakLedger as never}
         sessionId={"s1" as never}
         t={zhT}
       />)

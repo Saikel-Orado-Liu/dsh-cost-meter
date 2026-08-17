@@ -21,13 +21,14 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
-import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS } from './pricing.ts'
+import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS, PEAK_SCHEDULE_EN, PEAK_SCHEDULE_ZH } from './pricing.ts'
 import type {
   Currency,
   CurrentPricing,
   FxConfig,
   ModelPrice,
   PeakPricing,
+  PeakSchedule,
   PriceBand,
   PricebookSnapshot,
   PricebookState,
@@ -177,13 +178,15 @@ export function modelKeys(provider: string | undefined, model: string): string[]
 
 /**
  * The price band in effect at one instant: pre-rollout single price, or the
- * peak/off-peak band once the rollout is live.
+ * peak/off-peak band once the rollout is live, classified against the
+ * pricebook's own schedule (the zh or en page may state different windows).
  * @param time - epoch millis.
+ * @param schedule - the peak-hour schedule to classify against.
  * @returns the band.
  */
-export function bandForTime(time: number): PriceBand {
+export function bandForTime(time: number, schedule: PeakSchedule = PEAK_SCHEDULE_ZH): PriceBand {
   if (time < PEAK_PRICING_START_MS) return 'single'
-  return isPeakHour(new Date(time)) ? 'peak' : 'offPeak'
+  return isPeakHour(new Date(time), schedule) ? 'peak' : 'offPeak'
 }
 
 /**
@@ -203,10 +206,15 @@ export function bucketOf(modelPrice: ModelPrice, band: PriceBand): PriceBucket |
  * Resolve one model's bucket at one instant from its price entry.
  * @param modelPrice - the model's price entry.
  * @param time - the instant to price for.
+ * @param schedule - the peak-hour schedule to classify against.
  * @returns the bucket and band, or null when the entry has no tier.
  */
-export function priceAt(modelPrice: ModelPrice, time: number): { bucket: PriceBucket; band: PriceBand } | null {
-  const band = bandForTime(time)
+export function priceAt(
+  modelPrice: ModelPrice,
+  time: number,
+  schedule: PeakSchedule = PEAK_SCHEDULE_ZH,
+): { bucket: PriceBucket; band: PriceBand } | null {
+  const band = bandForTime(time, schedule)
   const bucket = bucketOf(modelPrice, band)
   return bucket === undefined ? null : { bucket, band }
 }
@@ -307,6 +315,8 @@ export interface OfficialPricingInput {
   current: CurrentPricing
   /** Peak/off-peak table, when the page carried it. */
   peak?: PeakPricing
+  /** Peak-hour schedule of the fetched page (or the locale fallback). */
+  schedule: PeakSchedule
   /** Fetch/parse failure reason; set when `current` is the fallback table. */
   error?: string
 }
@@ -494,7 +504,12 @@ export async function fetchOpenRouter(
 
 /** Fold a raw {@link PricingSnapshot} into the pricebook's official input. */
 export function officialInputOf(snapshot: PricingSnapshot): OfficialPricingInput {
-  return { current: snapshot.current, ...(snapshot.peak === undefined ? {} : { peak: snapshot.peak }), ...(snapshot.error === undefined ? {} : { error: snapshot.error }) }
+  return {
+    current: snapshot.current,
+    ...(snapshot.peak === undefined ? {} : { peak: snapshot.peak }),
+    schedule: snapshot.schedule,
+    ...(snapshot.error === undefined ? {} : { error: snapshot.error }),
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -533,15 +548,19 @@ export class PricebookHandle {
   private lastOpenRouter: OpenRouterInput | null = null
   private lastFxError: string | undefined
   private fetchedAt = 0
+  /** Peak-hour schedule of the pricebook's page (locale-matched). */
+  schedule: PeakSchedule
 
   constructor(
     private readonly ctx: Context,
     private readonly config: PricebookResolvedConfig,
     persisted: PricebookState | undefined,
     private readonly currency: Currency = 'CNY',
+    schedule?: PeakSchedule,
   ) {
     this.state = persisted ?? { ...initialPricebookState(), openRouterEnabled: config.openRouterEnabled }
-    this.lastOfficial = { current: currency === 'USD' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT }
+    this.schedule = schedule ?? (currency === 'USD' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH)
+    this.lastOfficial = { current: currency === 'USD' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT, schedule: this.schedule }
   }
 
   /**
@@ -612,7 +631,7 @@ export class PricebookHandle {
     for (const key of modelKeys(provider, model)) {
       const entry = snapshot.prices[key]
       if (entry === undefined) continue
-      const hit = priceAt(entry, time)
+      const hit = priceAt(entry, time, this.schedule)
       if (hit === null) continue
       return {
         bucket: hit.bucket,
@@ -679,6 +698,7 @@ export class PricebookHandle {
   }): Promise<void> {
     const official = options?.official ?? await fetchPricing(globalThis.fetch, 15_000, this.currency === 'USD' ? 'en' : 'zh')
     this.lastOfficial = officialInputOf(official)
+    this.schedule = this.lastOfficial.schedule
     this.lastFxError = undefined
     if (options?.fx !== undefined) {
       this.applyFxResult(options.fx.rate, options.fx.error)
@@ -817,6 +837,7 @@ export class PricebookHandle {
       balanceEnabled: this.state.balanceEnabled,
       openRouterEnabled: this.state.openRouterEnabled,
       fetchedAt: this.fetchedAt,
+      schedule: this.schedule,
       ...(Object.keys(errors).length > 0 ? { errors } : {}),
     }
   }

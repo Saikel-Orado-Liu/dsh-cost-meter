@@ -12,7 +12,7 @@
  * @module @gamegeek-saikel/dsh-cost-meter/pricing
  */
 
-import type { CurrentPricing, PeakPricing, PriceBucket, PricingSnapshot } from './types.ts'
+import type { CurrentPricing, PeakHourRange, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot } from './types.ts'
 
 /** Official pricing page URL (zh-cn). */
 export const PRICING_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/'
@@ -22,6 +22,26 @@ export const PRICING_URL_EN = 'https://api-docs.deepseek.com/quick_start/pricing
 
 /** Official peak-pricing rollout: 2026-08-17 00:00 Beijing time (UTC+8). */
 export const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0)
+
+/**
+ * Built-in fallback zh peak schedule: the official announcement's windows in
+ * Beijing time (peak 09:00-12:00 / 14:00-18:00, everything else off-peak).
+ */
+export const PEAK_SCHEDULE_ZH: PeakSchedule = {
+  timezone: 'Asia/Shanghai',
+  ranges: [[9, 12], [14, 18]],
+}
+
+/**
+ * Built-in fallback en peak schedule. Kept as a separate constant from the zh
+ * schedule because the English pricing page may state different windows or a
+ * different timezone; each pricebook parses its own page and falls back to
+ * this locale-matched default only when the page carries no schedule.
+ */
+export const PEAK_SCHEDULE_EN: PeakSchedule = {
+  timezone: 'Asia/Shanghai',
+  ranges: [[9, 12], [14, 18]],
+}
 
 /**
  * Built-in fallback prices: the official list for deepseek-v4-flash and
@@ -263,6 +283,45 @@ export function parsePeakTableEn(html: string): PeakPricing | undefined {
   return parseEnglishPricing(html)?.peak
 }
 
+/** Two `HH:MM-HH:MM` windows (the second one after a separator). */
+const SCHEDULE_WINDOWS_RE = /(\d{1,2}):(\d{2})\s*[-–—~至]\s*(\d{1,2}):(\d{2})\s*(?:[、,，;]\s*)?(?:and\s*)?(\d{1,2}):(\d{2})\s*[-–—~至]\s*(\d{1,2}):(\d{2})/i
+
+/**
+ * Parse the peak-hour schedule from a pricing page: the two half-open
+ * windows next to the localized peak label (`高峰时段` / `peak hours`), plus
+ * the timezone the windows are expressed in. The Chinese page states Beijing
+ * time; the English page may state Beijing time or UTC — a Beijing/UTC+8
+ * mention wins, a bare UTC mention selects UTC, anything else defaults to
+ * Beijing time.
+ * @param html - the raw pricing page.
+ * @param locale - which page's wording to look for.
+ * @returns the parsed schedule, or undefined when the page carries none.
+ */
+export function parsePeakSchedule(html: string, locale: 'zh' | 'en' = 'zh'): PeakSchedule | undefined {
+  const text = stripHtml(html)
+  const label = locale === 'zh' ? '高峰时段' : /peak\s*hours?/i
+  const labelIndex = typeof label === 'string' ? text.indexOf(label) : text.search(label)
+  if (labelIndex < 0) return undefined
+  const window = text.slice(labelIndex, labelIndex + 200)
+  const match = SCHEDULE_WINDOWS_RE.exec(window)
+  if (match === null) return undefined
+  const ranges: PeakHourRange[] = [
+    [Number(match[1]), Number(match[3])],
+    [Number(match[5]), Number(match[7])],
+  ]
+  if (ranges.some(([start, end]) =>
+    !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 24 || start >= end)) {
+    return undefined
+  }
+  if (/\b(?:beijing|北京时间|china standard)\b/i.test(window) || /\butc\s*\+\s*8\b/i.test(window)) {
+    return { timezone: 'Asia/Shanghai', ranges }
+  }
+  if (/\butc\b/i.test(window)) {
+    return { timezone: 'UTC', ranges }
+  }
+  return { timezone: 'Asia/Shanghai', ranges }
+}
+
 /**
  * Fetch and parse the official pricing page.
  * @param fetchImpl - fetch-compatible function (injected for testability).
@@ -281,6 +340,7 @@ export async function fetchPricing(
   const parsePeak = locale === 'en' ? parsePeakTableEn : parsePeakTable
   const fallbackCurrent = locale === 'en' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT
   const fallbackPeak = locale === 'en' ? FALLBACK_PEAK_USD : FALLBACK_PEAK
+  const fallbackSchedule = locale === 'en' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -291,14 +351,15 @@ export async function fetchPricing(
       clearTimeout(timer)
     }
     if (!response.ok) {
-      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, error: `pricing page HTTP ${response.status}` }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: `pricing page HTTP ${response.status}` }
     }
     const html = await response.text()
     const current = parseCurrent(html)
     if (current === undefined) {
-      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, error: 'pricing table not found' }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: 'pricing table not found' }
     }
     const peak = parsePeak(html)
+    const schedule = parsePeakSchedule(html, locale) ?? fallbackSchedule
     const now = Date.now()
     const peakActive = now >= PEAK_PRICING_START_MS
     return {
@@ -307,8 +368,9 @@ export async function fetchPricing(
       current,
       ...(peak === undefined ? {} : { peak }),
       peakActive,
-      effective: effectivePricing(current, peak, peakActive, new Date(now)),
-      ...(peakActive ? { band: isPeakHour(new Date(now)) ? 'peak' : 'offPeak' } : {}),
+      effective: effectivePricing(current, peak, peakActive, new Date(now), schedule),
+      ...(peakActive ? { band: isPeakHour(new Date(now), schedule) ? 'peak' : 'offPeak' } : {}),
+      schedule,
     }
   } catch (error) {
     return {
@@ -317,26 +379,29 @@ export async function fetchPricing(
       current: fallbackCurrent,
       peakActive: false,
       effective: fallbackCurrent,
+      schedule: fallbackSchedule,
       error: error instanceof Error ? error.message : String(error)
     }
   }
 }
 
 /**
- * Whether the current moment is a peak-pricing hour in Beijing time:
- * 09:00-12:00 and 14:00-18:00 (peak); everything else is off-peak.
+ * Whether the given instant is a peak-pricing hour under one schedule: the
+ * zh fallback is Beijing time 09:00-12:00 and 14:00-18:00; each pricebook
+ * passes the schedule parsed from its own (zh or en) pricing page.
  * @param now - the instant to classify.
+ * @param schedule - the peak-hour schedule to classify against.
  * @returns true during peak hours.
  */
-export function isPeakHour(now: Date = new Date()): boolean {
+export function isPeakHour(now: Date = new Date(), schedule: PeakSchedule = PEAK_SCHEDULE_ZH): boolean {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Shanghai',
+    timeZone: schedule.timezone,
     hour: 'numeric',
     hour12: false,
   }).formatToParts(now)
   const hour = Number(parts.find(part => part.type === 'hour')?.value)
   if (Number.isNaN(hour)) return false
-  return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18)
+  return schedule.ranges.some(([start, end]) => hour >= start && hour < end)
 }
 
 /**
@@ -348,6 +413,7 @@ export function isPeakHour(now: Date = new Date()): boolean {
  * @param peakActive - whether the rollout has started.
  * @param now - the instant to price for.
  * @param model - `flash` or `pro`.
+ * @param schedule - the peak-hour schedule to classify against.
  * @returns the bucket to apply.
  */
 export function effectiveBucket(
@@ -356,10 +422,11 @@ export function effectiveBucket(
   peakActive: boolean,
   now: Date,
   model: keyof CurrentPricing,
+  schedule: PeakSchedule = PEAK_SCHEDULE_ZH,
 ): PriceBucket {
   if (peakActive) {
     const table = peak?.[model] ?? FALLBACK_PEAK[model]
-    return isPeakHour(now) ? table.peak : table.offPeak
+    return isPeakHour(now, schedule) ? table.peak : table.offPeak
   }
   return current[model]
 }
@@ -370,9 +437,10 @@ export function effectivePricing(
   peak: PeakPricing | undefined,
   peakActive: boolean,
   now: Date,
+  schedule: PeakSchedule = PEAK_SCHEDULE_ZH,
 ): CurrentPricing {
   return {
-    flash: effectiveBucket(current, peak, peakActive, now, 'flash'),
-    pro: effectiveBucket(current, peak, peakActive, now, 'pro'),
+    flash: effectiveBucket(current, peak, peakActive, now, 'flash', schedule),
+    pro: effectiveBucket(current, peak, peakActive, now, 'pro', schedule),
   }
 }

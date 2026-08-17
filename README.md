@@ -43,7 +43,7 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 |---|---|
 | Cost anchoring | Append-only pricebook snapshots; step cost computed once at the event's own time |
 | Price sources | Manual override > official pricing page > built-in fallback > OpenRouter (fallback only, USD→CNY) > none |
-| Peak pricing | 2026-08-17 00:00 Beijing rollout; peak 09:00–12:00 / 14:00–18:00 Beijing, off-peak half price |
+| Peak pricing | 2026-08-17 00:00 Beijing rollout; peak/off-peak windows parsed from each page's own schedule (the zh and en pages may differ; fallback 09:00–12:00 / 14:00–18:00 Beijing), off-peak half price |
 | Cost formula | Uncached input + cache reads (hit rate) + cache writes (billed at uncached input rate) + output, per 1M tokens, CNY |
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
 | Subagent support | BFS over the live agent tree; conversation totals = main session + descendants |
@@ -71,7 +71,7 @@ The pricebook (`src/pricebook.ts`) is the durable price source, persisted on the
 
 - **Priority chain** — per canonical model key (`provider/model`, bare model, or the `flash`/`pro` pricing key for DeepSeek-family models): manual override > official page > built-in fallback > OpenRouter (fallback only, USD→CNY, cache reads at the configured discount) > none.
 - **Snapshot selection** — `snapshotForTime` picks the newest snapshot with `effectiveAt <= event time` (pre-install sessions anchor to the first snapshot once).
-- **Peak/off-peak** — before the 2026-08-17 rollout all steps price at the single list price; after it, the band is chosen by Beijing time (peak 09:00–12:00 / 14:00–18:00, everything else off-peak).
+- **Peak/off-peak** — before the 2026-08-17 rollout all steps price at the single list price; after it, the band is chosen by the EVENT's own time against the schedule of the pricebook's own page (the zh and en pages each parse their own peak windows, falling back to Beijing 09:00–12:00 / 14:00–18:00, everything else off-peak). Each step's band is anchored once at fold time, so the per-reply cards and chips always show the band that round was billed at — never the band of the moment you are looking.
 - **Immutable ledger** — the `sessionCost` projection (`src/session-cost-projection.ts`) folds `request/header` (model) and usage-carrying events into per-step rows; a second usage sample for the same (turn, step) replaces the first (same-step finalization, not a re-price), with O(1) incremental totals.
 
 ## Project Structure

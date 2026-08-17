@@ -93,7 +93,7 @@ export interface CurrentPricing {
 export interface PeakModelPricing {
   /** Off-peak hours prices (half of peak). */
   offPeak: PriceBucket
-  /** Peak hours prices (09:00-12:00 / 14:00-18:00 Beijing). */
+  /** Peak hours prices (see the page's `PeakSchedule` for the windows). */
   peak: PriceBucket
 }
 
@@ -101,6 +101,22 @@ export interface PeakModelPricing {
 export interface PeakPricing {
   flash: PeakModelPricing
   pro: PeakModelPricing
+}
+
+/** One half-open peak window: `[startHour, endHour)` in the schedule's timezone. */
+export type PeakHourRange = readonly [startHour: number, endHour: number]
+
+/**
+ * The peak/off-peak wall-clock schedule of one official pricing page. The
+ * Chinese and English pages may state different windows or timezones, so
+ * every pricebook carries the schedule of the page it was fetched from and
+ * the band is always classified against that schedule.
+ */
+export interface PeakSchedule {
+  /** IANA timezone the windows are expressed in (e.g. `Asia/Shanghai`, `UTC`). */
+  timezone: string
+  /** Half-open peak windows in `timezone` wall-clock hours. */
+  ranges: readonly PeakHourRange[]
 }
 
 /**
@@ -122,6 +138,8 @@ export interface PricingSnapshot {
   effective: CurrentPricing
   /** The pricing band in effect while the rollout is live; absent before it. */
   band?: 'peak' | 'offPeak'
+  /** Peak-hour schedule of the fetched page (or the locale fallback). */
+  schedule: PeakSchedule
   /** Fetch/parse failure reason; absent while the official page parsed cleanly. */
   error?: string
 }
@@ -149,7 +167,7 @@ export interface ModelPrice {
   source: PriceSource
   /** Pre-rollout single list price. */
   single?: PriceBucket
-  /** Post-rollout off-peak price (09:00-12:00 / 14:00-18:00 Beijing half). */
+  /** Post-rollout off-peak price (the page's off-peak windows). */
   offPeak?: PriceBucket
   /** Post-rollout peak price. */
   peak?: PriceBucket
@@ -239,6 +257,8 @@ export interface PricebookView {
   openRouterEnabled: boolean
   /** Epoch millis of the last refresh. */
   fetchedAt: number
+  /** Peak-hour schedule of the pricebook's official page (locale-matched). */
+  schedule: PeakSchedule
   /** Refresh diagnostics (absent when the corresponding fetch succeeded). */
   errors?: {
     /** Official pricing-page fetch/parse failure. */

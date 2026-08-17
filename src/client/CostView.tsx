@@ -101,7 +101,11 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
         <h3 className={css.stepsTitle}>{t('view.steps')}</h3>
         <ol className={css.stepList}>
           {rows.map((step) => {
-            const stepBand = bandForTime(Date.now())
+            // The band is anchored to the ROUND's own time: the ledger's
+            // `band` was fixed at fold time from the usage event's time (the
+            // host schedule of that moment), never recomputed against the
+            // clock now — so an old reply keeps the color it was billed at.
+            const stepBand = step.band ?? bandForTime(step.time)
             const stepRatio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, step.provider, step.model)
             const stepBandLabel = stepBand === 'peak'
               ? stepRatio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(stepRatio) })

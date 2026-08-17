@@ -93,7 +93,10 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
   }
 
   const amount = `${currencySymbol(currency)}${formatMoney(ledger.cost)}`
-  const band = bandForTime(Date.now())
+  // Anchored to the ROUND's own time: the ledger's `band` was fixed at fold
+  // time from the usage event's time, so the badge shows the band that
+  // actually priced this reply — not the band of the clock right now.
+  const band = ledger.band ?? bandForTime(ledger.time)
   const ratio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, ledger.provider, ledger.model)
   const bandLabel = band === 'peak'
     ? ratio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(ratio) })

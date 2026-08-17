@@ -10,9 +10,10 @@
  * @module @gamegeek-saikel/dsh-cost-meter/client/cost-math
  */
 
-import { isPeakHour, PEAK_PRICING_START_MS } from '../pricing.ts'
+import { isPeakHour, PEAK_PRICING_START_MS, PEAK_SCHEDULE_ZH } from '../pricing.ts'
 import type {
   ModelPrice,
+  PeakSchedule,
   PriceBand,
   PriceBucket,
   PricebookSnapshot,
@@ -67,10 +68,18 @@ export function combineTotals(
   return sumTotals([main, ...subagents.map(entry => entry.totals)])
 }
 
-/** The price band in effect at one instant (mirror of the host helper). */
-export function bandForTime(time: number): PriceBand {
+/**
+ * The price band in effect at one instant (mirror of the host helper). The
+ * schedule defaults to the zh fallback; live readouts pass the schedule of
+ * the pricebook they display (the zh and en pages may state different
+ * windows).
+ * @param time - epoch millis.
+ * @param schedule - the peak-hour schedule to classify against.
+ * @returns the band.
+ */
+export function bandForTime(time: number, schedule: PeakSchedule = PEAK_SCHEDULE_ZH): PriceBand {
   if (time < PEAK_PRICING_START_MS) return 'single'
-  return isPeakHour(new Date(time)) ? 'peak' : 'offPeak'
+  return isPeakHour(new Date(time), schedule) ? 'peak' : 'offPeak'
 }
 
 /** The bucket of one model's entry for one band (mirror of the host helper). */
@@ -128,10 +137,11 @@ export function bucketAt(
   provider: string | undefined,
   model: string,
   time: number,
+  schedule: PeakSchedule = PEAK_SCHEDULE_ZH,
 ): PriceBucket | undefined {
   const entry = modelPriceOf(snapshot, provider, model)
   if (entry === undefined) return undefined
-  return bucketOf(entry, bandForTime(time))
+  return bucketOf(entry, bandForTime(time, schedule))
 }
 
 /**

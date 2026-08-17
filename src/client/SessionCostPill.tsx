@@ -98,6 +98,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const projection = cost
   const model = projection?.model ?? null
   const snapshot = response?.pricebook.current ?? null
+  const schedule = response?.pricebook.schedule
   const subagents = response?.subagents
   const combined = combineTotals(projection?.totals, subagents)
   const subSpend = subagentSpend(subagents)
@@ -108,14 +109,14 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   // estimated input/output (subagent replies cannot be projected live).
   const estimate = useMemo(() => {
     if (!running || projection === undefined) return null
-    const bucket = bucketAt(snapshot ?? undefined, model?.provider, model?.model ?? 'unknown', Date.now())
+    const bucket = bucketAt(snapshot ?? undefined, model?.provider, model?.model ?? 'unknown', Date.now(), schedule)
     if (bucket === undefined) return null
     const inputTokens = pressure?.projectedTokens ?? pressure?.pressureTokens ?? 0
     const cachedRatio = cacheReadRatioOf(projection.steps)
     const outputTokens = blocksOutputTokens(partial?.blocks)
     const stepEstimate = estimateCost(bucket, inputTokens, cachedRatio, outputTokens)
     return (combined?.cost ?? 0) + stepEstimate
-  }, [running, projection, combined, snapshot, model, pressure, partial, currency])
+  }, [running, projection, combined, snapshot, schedule, model, pressure, partial, currency])
 
   if (projection === undefined && estimate === null) return null
 
@@ -131,7 +132,11 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const sourceKey = snapshot?.source ?? null
   const source = sourceKey === null ? t('source.none') : t(`source.${sourceKey}` as 'source.manual')
 
-  const band = bandForTime(Date.now())
+  // The pill's band is a LIVE readout: the price regime in effect RIGHT NOW,
+  // classified against the schedule of the pricebook being displayed (the zh
+  // and en pages may state different windows). The per-reply chip and the
+  // cost tab, by contrast, use each step's ANCHORED band.
+  const band = bandForTime(Date.now(), schedule)
   const peakRatio = peakOffPeakMultiplier(snapshot ?? undefined, model?.provider, model?.model ?? 'unknown')
   const bandLabel = band === 'peak'
     ? peakRatio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(peakRatio) })
