@@ -58,6 +58,46 @@ const PAGE_HTML_EN = `
 </body></html>
 `
 
+/** Chinese markup of the updated page (2026-08-21): one combined table with
+ * three model columns and OFF-PEAK/PEAK cells per bucket row. */
+const PAGE_HTML_2026_ZH = `
+<html><body>
+<h1>模型 &amp; 价格</h1>
+<p>高峰时段为北京时间 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）</p>
+<table>
+<tr><td rowspan="2">百万tokens输入
+（缓存命中）</td><td>空闲时段</td><td>0.05元</td><td>0.15元</td><td>0.05元</td></tr>
+<tr><td>高峰时段</td><td>0.10元</td><td>0.30元</td><td>0.10元</td></tr>
+<tr><td rowspan="2">百万tokens输入
+（缓存未命中）</td><td>空闲时段</td><td>1.5元</td><td>4.5元</td><td>1.5元</td></tr>
+<tr><td>高峰时段</td><td>3.0元</td><td>9.0元</td><td>3.0元</td></tr>
+<tr><td rowspan="2">百万tokens输出</td><td>空闲时段</td><td>4.5元</td><td>13.5元</td><td>4.5元</td></tr>
+<tr><td>高峰时段</td><td>9.0元</td><td>27.0元</td><td>9.0元</td></tr>
+<tr><td>并发限制</td><td>2500</td><td>500</td><td>2500</td></tr>
+</table>
+</body></html>
+`
+
+/** English markup of the updated page (2026-08-21): three model columns and
+ * a UTC peak schedule. */
+const PAGE_HTML_2026_EN = `
+<html><body>
+<h1>Models &amp; Pricing</h1>
+<p>Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC</p>
+<table>
+<tr><td rowspan="2">1M INPUT TOKENS
+(CACHE HIT)</td><td>OFF-PEAK</td><td>$0.007</td><td>$0.022</td><td>$0.007</td></tr>
+<tr><td>PEAK</td><td>$0.014</td><td>$0.044</td><td>$0.014</td></tr>
+<tr><td rowspan="2">1M INPUT TOKENS
+(CACHE MISS)</td><td>OFF-PEAK</td><td>$0.22</td><td>$0.66</td><td>$0.22</td></tr>
+<tr><td>PEAK</td><td>$0.44</td><td>$1.32</td><td>$0.44</td></tr>
+<tr><td rowspan="2">1M OUTPUT TOKENS</td><td>OFF-PEAK</td><td>$0.66</td><td>$1.98</td><td>$0.66</td></tr>
+<tr><td>PEAK</td><td>$1.32</td><td>$3.96</td><td>$1.32</td></tr>
+<tr><td>Concurrency Limit</td><td>2500</td><td>500</td><td>2500</td></tr>
+</table>
+</body></html>
+`
+
 describe('parseCurrentTable', () => {
   it('parses the flash and pro price cells of the current table', () => {
     const parsed = parseCurrentTable(PAGE_HTML)
@@ -115,6 +155,84 @@ describe('parsePeakTableEn', () => {
         peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
       },
     })
+  })
+})
+
+describe('updated 2026-08-21 combined table', () => {
+  it('parses the zh off-peak/peak cells and the third vision column', () => {
+    expect(parseCurrentTable(PAGE_HTML_2026_ZH)).toEqual({
+      flash: { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 },
+      pro: { cacheReadPerMillion: 0.15, inputPerMillion: 4.5, outputPerMillion: 13.5 },
+      vision: { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 },
+    })
+    expect(parsePeakTable(PAGE_HTML_2026_ZH)).toEqual({
+      flash: {
+        offPeak: { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 },
+        peak: { cacheReadPerMillion: 0.1, inputPerMillion: 3, outputPerMillion: 9 },
+      },
+      pro: {
+        offPeak: { cacheReadPerMillion: 0.15, inputPerMillion: 4.5, outputPerMillion: 13.5 },
+        peak: { cacheReadPerMillion: 0.3, inputPerMillion: 9, outputPerMillion: 27 },
+      },
+      vision: {
+        offPeak: { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 },
+        peak: { cacheReadPerMillion: 0.1, inputPerMillion: 3, outputPerMillion: 9 },
+      },
+    })
+    expect(parsePeakSchedule(PAGE_HTML_2026_ZH, 'zh')).toEqual(PEAK_SCHEDULE_ZH)
+  })
+
+  it('parses the en off-peak/peak cells, the third vision column, and the UTC schedule', () => {
+    expect(parseCurrentTableEn(PAGE_HTML_2026_EN)).toEqual({
+      flash: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+      pro: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+      vision: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+    })
+    expect(parsePeakTableEn(PAGE_HTML_2026_EN)).toEqual({
+      flash: {
+        offPeak: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+        peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
+      },
+      pro: {
+        offPeak: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+        peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
+      },
+      vision: {
+        offPeak: { cacheReadPerMillion: 0.007, inputPerMillion: 0.22, outputPerMillion: 0.66 },
+        peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
+      },
+    })
+    expect(parsePeakSchedule(PAGE_HTML_2026_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
+  })
+
+  it('folds the updated zh page into a clean official snapshot', async () => {
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => PAGE_HTML_2026_ZH,
+    }) as unknown as typeof fetch
+    const snapshot = await fetchPricing(fetchImpl)
+    expect(snapshot.error).toBeUndefined()
+    expect(snapshot.current.vision).toEqual(snapshot.current.flash)
+    expect(snapshot.peak?.vision?.peak.outputPerMillion).toBe(9)
+    // The combined page has no separate legacy list: fetch keeps the
+    // off-peak column as `current` and leaves `legacyCurrent` absent.
+    expect(snapshot.legacyCurrent).toBeUndefined()
+    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_ZH)
+  })
+
+  it('folds the updated en page into a clean USD snapshot', async () => {
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => PAGE_HTML_2026_EN,
+    }) as unknown as typeof fetch
+    const snapshot = await fetchPricing(fetchImpl, 15_000, 'en')
+    expect(snapshot.error).toBeUndefined()
+    expect(snapshot.current.vision).toEqual(snapshot.current.flash)
+    expect(snapshot.peak?.vision?.peak.outputPerMillion).toBe(1.32)
+    expect(snapshot.legacyCurrent).toBeUndefined()
+    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
   })
 })
 

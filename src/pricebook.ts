@@ -311,8 +311,10 @@ export function pricesEqual(
 
 /** Normalized official-page input: the parsed lists plus the failure marker. */
 export interface OfficialPricingInput {
-  /** Current (pre-rollout) list — the built-in fallback when the fetch failed. */
+  /** Current list prices — the off-peak column on the combined page, or the built-in fallback when the fetch failed. */
   current: CurrentPricing
+  /** The page's separate pre-rollout single-price table, when it still carries one. */
+  legacyCurrent?: CurrentPricing
   /** Peak/off-peak table, when the page carried it. */
   peak?: PeakPricing
   /** Peak-hour schedule of the fetched page (or the locale fallback). */
@@ -374,16 +376,34 @@ export function computePricebook(
     prices[key] = { ...override, source: 'manual' }
   }
 
-  // 2. Official page (or built-in fallback) for the flash/pro pricing keys.
+  // 2. Official page (or built-in fallback) for the DeepSeek pricing keys.
+  // `current` on the 2026-08-21 page is the off-peak column; its historical
+  // single-price role comes from the separate legacy table when present, or
+  // from the built-in pre-rollout list otherwise.
   const officialSource: PriceSource = official.error === undefined ? 'official' : 'fallback'
+  const fallbackCurrent = currency === 'USD' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT
+  const singleTable = official.legacyCurrent ?? fallbackCurrent
+  const peakTable = official.peak ?? fallbackPeak
   for (const key of ['flash', 'pro'] as const) {
     if (prices[key] !== undefined) continue
-    const peakTable = official.peak ?? fallbackPeak
     prices[key] = {
       source: officialSource,
-      single: official.current[key],
+      single: singleTable[key],
       offPeak: peakTable[key].offPeak,
       peak: peakTable[key].peak,
+    }
+  }
+
+  // The vision model gets its own canonical key once the page lists it, so a
+  // future price split from flash resolves through the specific key first.
+  const visionKey = 'deepseek-v4-flash-vision-exp'
+  const visionPeak = peakTable.vision ?? fallbackPeak.vision ?? fallbackPeak.flash
+  if (prices[visionKey] === undefined && (official.current.vision !== undefined || peakTable.vision !== undefined)) {
+    prices[visionKey] = {
+      source: officialSource,
+      single: singleTable.vision ?? singleTable.flash,
+      offPeak: visionPeak.offPeak,
+      peak: visionPeak.peak,
     }
   }
 
@@ -506,6 +526,7 @@ export async function fetchOpenRouter(
 export function officialInputOf(snapshot: PricingSnapshot): OfficialPricingInput {
   return {
     current: snapshot.current,
+    ...(snapshot.legacyCurrent === undefined ? {} : { legacyCurrent: snapshot.legacyCurrent }),
     ...(snapshot.peak === undefined ? {} : { peak: snapshot.peak }),
     schedule: snapshot.schedule,
     ...(snapshot.error === undefined ? {} : { error: snapshot.error }),

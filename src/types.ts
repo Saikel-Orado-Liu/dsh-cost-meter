@@ -87,6 +87,12 @@ export interface CurrentPricing {
   flash: PriceBucket
   /** deepseek-v4-pro prices. */
   pro: PriceBucket
+  /**
+   * deepseek-v4-flash-vision-exp prices; present once the official page
+   * lists the model in its own column (the page started doing so on
+   * 2026-08-21).
+   */
+  vision?: PriceBucket
 }
 
 /** One model's peak/off-peak price set (the 2026-08-17 rollout). */
@@ -101,6 +107,8 @@ export interface PeakModelPricing {
 export interface PeakPricing {
   flash: PeakModelPricing
   pro: PeakModelPricing
+  /** Present once the official page lists deepseek-v4-flash-vision-exp. */
+  vision?: PeakModelPricing
 }
 
 /** One half-open peak window: `[startHour, endHour)` in the schedule's timezone. */
@@ -130,6 +138,13 @@ export interface PricingSnapshot {
   currency: Currency
   /** Current (pre-rollout) official list prices; built-in fallback on fetch failure. */
   current: CurrentPricing
+  /**
+   * The page's separate pre-rollout single-price table, when the page still
+   * carries one. On the 2026-08-21 combined page only `current` (the
+   * off-peak column) and `peak` exist; the pricebook then keeps the built-in
+   * pre-rollout list for `single`, so old events are not repriced.
+   */
+  legacyCurrent?: CurrentPricing
   /** Upcoming peak/off-peak table, when the page carried it. */
   peak?: PeakPricing
   /** Whether the peak-pricing rollout has started (>= 2026-08-17 00:00 Beijing). */

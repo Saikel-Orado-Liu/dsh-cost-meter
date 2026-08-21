@@ -1,2 +1,8 @@
 minimumReleaseAgeExclude:
-  - '@deepseek-ai/dsh-client-ui-settings-plugins@0.1.0-rc.7'
+  - '@deepseek-ai/dsh-*'
+
+# The 0.1.1-rc.1 release train is only tagged `next`; pnpm's auto-installed
+# peer resolver otherwise misses these two prerelease-only transitive peers.
+overrides:
+  '@deepseek-ai/dsh-sandbox': 0.1.1-rc.1
+  '@deepseek-ai/dsh-sandbox-policy': 0.1.1-rc.1

@@ -23,7 +23,6 @@
  * @module @gamegeek-saikel/dsh-cost-meter/session-cost-projection
  */
 
-import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { canonicalHeader } from '@deepseek-ai/dsh-session'
 import { z } from 'zod'
@@ -40,6 +39,15 @@ export interface SessionCostState {
   totals: SessionCostTotals
 }
 
+declare module '@deepseek-ai/dsh-session-projection/types' {
+  interface SessionProjectionStateMap {
+    /** Fold state behind `sessionCost`. */
+    sessionCost: SessionCostState
+    /** Fold state behind `sessionCostUsd`. */
+    sessionCostUsd: SessionCostState
+  }
+}
+
 const zeroTotals = (): SessionCostTotals => ({
   uncachedCost: 0,
   cacheReadCost: 0,
@@ -50,38 +58,52 @@ const zeroTotals = (): SessionCostTotals => ({
   steps: 0,
 })
 
-/** Wire schema of the projection value (validated before it leaves the host). */
+/** One ledger step, shared by the persisted state and the wire schemas. */
+const stepSchema = z.object({
+  turn: z.number().int().nonnegative(),
+  step: z.number().int().nonnegative(),
+  time: z.number().int().nonnegative(),
+  model: z.string(),
+  provider: z.string().optional(),
+  uncachedInputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cacheWriteTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  uncachedCost: z.number().nonnegative(),
+  cacheReadCost: z.number().nonnegative(),
+  outputCost: z.number().nonnegative(),
+  cost: z.number().nullable(),
+  priced: z.boolean(),
+  unpricedReason: z.enum(['NO_MODEL', 'NO_PRICE']).optional(),
+  snapshotVersion: z.number().int().nonnegative().nullable(),
+  snapshotEffectiveAt: z.number().int().nonnegative().nullable(),
+  band: z.enum(['peak', 'offPeak', 'single']).nullable(),
+}).strict()
+
+const totalsSchema = z.object({
+  uncachedCost: z.number().nonnegative(),
+  cacheReadCost: z.number().nonnegative(),
+  outputCost: z.number().nonnegative(),
+  cost: z.number().nonnegative(),
+  pricedSteps: z.number().int().nonnegative(),
+  unpricedSteps: z.number().int().nonnegative(),
+  steps: z.number().int().nonnegative(),
+}).strict()
+
+const modelSchema = z.object({ provider: z.string(), model: z.string() }).nullable()
+
+/** Persisted fold-state schema (`stateSchema` in the projection definition). */
+const projectionStateSchema = z.object({
+  model: modelSchema,
+  steps: z.record(z.string(), stepSchema),
+  totals: totalsSchema,
+}).strict()
+
+/** Wire schema of the projection value (`wire.viewSchema`). */
 const projectionSchema = z.object({
-  model: z.object({ provider: z.string(), model: z.string() }).nullable(),
-  steps: z.array(z.object({
-    turn: z.number().int().nonnegative(),
-    step: z.number().int().nonnegative(),
-    time: z.number().int().nonnegative(),
-    model: z.string(),
-    provider: z.string().optional(),
-    uncachedInputTokens: z.number().int().nonnegative(),
-    cacheReadTokens: z.number().int().nonnegative(),
-    cacheWriteTokens: z.number().int().nonnegative(),
-    outputTokens: z.number().int().nonnegative(),
-    uncachedCost: z.number().nonnegative(),
-    cacheReadCost: z.number().nonnegative(),
-    outputCost: z.number().nonnegative(),
-    cost: z.number().nullable(),
-    priced: z.boolean(),
-    unpricedReason: z.enum(['NO_MODEL', 'NO_PRICE']).optional(),
-    snapshotVersion: z.number().int().nonnegative().nullable(),
-    snapshotEffectiveAt: z.number().int().nonnegative().nullable(),
-    band: z.enum(['peak', 'offPeak', 'single']).nullable(),
-  }).strict()),
-  totals: z.object({
-    uncachedCost: z.number().nonnegative(),
-    cacheReadCost: z.number().nonnegative(),
-    outputCost: z.number().nonnegative(),
-    cost: z.number().nonnegative(),
-    pricedSteps: z.number().int().nonnegative(),
-    unpricedSteps: z.number().int().nonnegative(),
-    steps: z.number().int().nonnegative(),
-  }).strict(),
+  model: modelSchema,
+  steps: z.array(stepSchema),
+  totals: totalsSchema,
 }).strict()
 
 /** Wire usage shape (subset of `TokenUsage`) the fold prices. */
@@ -226,13 +248,26 @@ export function viewSessionCost(state: SessionCostState): SessionCostProjection 
 export function sessionCostProjection<K extends 'sessionCost' | 'sessionCostUsd'>(
   pricebook: PricebookHandle,
   key: K,
-): ProjectionDefinition<K, SessionCostState> {
+): {
+  key: K
+  stateSchema: typeof projectionStateSchema
+  init: () => SessionCostState
+  apply: (state: SessionCostState, event: SessionEvent) => SessionCostState
+  wire: {
+    viewSchema: typeof projectionSchema
+    view: (state: SessionCostState) => SessionCostProjection
+  }
+  stateVersion: number
+} {
   return {
     key,
-    schema: projectionSchema,
+    stateSchema: projectionStateSchema,
     init: () => ({ model: null, steps: {}, totals: zeroTotals() }),
     apply: (state, event) => foldSessionCost(state, event, pricebook),
-    view: viewSessionCost,
+    wire: {
+      viewSchema: projectionSchema,
+      view: viewSessionCost,
+    },
     stateVersion: 1,
   }
 }

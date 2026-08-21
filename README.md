@@ -29,11 +29,11 @@ Then start the harness:
 npx @deepseek-ai/dsh web
 ```
 
-If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `>=0.1.1-rc.1 <0.2.0` (current local version `0.1.1-rc.1`). The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Overview
 
-Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange, and the upcoming 2026-08-17 peak/off-peak rollout), and a conversation spans many turns with cache-hit, cache-miss, cache-write, and output token buckets. Naively recomputing costs at *current* prices makes history drift every time the price table changes.
+Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange, and the 2026-08-17 peak/off-peak rollout; on 2026-08-21 the official zh/en pages were redesigned into a combined table with three model columns and OFF-PEAK/PEAK cells), and a conversation spans many turns with cache-hit, cache-miss, cache-write, and output token buckets. Naively recomputing costs at *current* prices makes history drift every time the price table changes.
 
 **Cost Meter** solves this with an **append-only pricebook**: every price/fx/band-table change starts a new immutable `PricebookSnapshot` (monotonic `version`, `effectiveAt`), and each usage event anchors to the snapshot effective at its own time. The result is an immutable per-step cost ledger that only grows — it never mutates. Live streaming estimates are explicitly labeled 估算/estimate because they use *current* prices; they are replaced by the exact anchored value once the step settles.
 
@@ -43,6 +43,7 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 |---|---|
 | Cost anchoring | Append-only pricebook snapshots; step cost computed once at the event's own time |
 | Price sources | Manual override > official pricing page > built-in fallback > OpenRouter (fallback only, USD→CNY) > none |
+| Official page | Parses both the 2026-08-21 combined zh/en tables (including the `deepseek-v4-flash-vision-exp` column and the English UTC schedule) and the legacy split tables; the built-in historical list still anchors `single` when the page no longer carries one |
 | Peak pricing | 2026-08-17 00:00 Beijing rollout; peak/off-peak windows parsed from each page's own schedule (the zh and en pages may differ; fallback 09:00–12:00 / 14:00–18:00 Beijing), off-peak half price |
 | Cost formula | Uncached input + cache reads (hit rate) + cache writes (billed at uncached input rate) + output, per 1M tokens, CNY |
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
@@ -71,7 +72,7 @@ The pricebook (`src/pricebook.ts`) is the durable price source, persisted on the
 
 - **Priority chain** — per canonical model key (`provider/model`, bare model, or the `flash`/`pro` pricing key for DeepSeek-family models): manual override > official page > built-in fallback > OpenRouter (fallback only, USD→CNY, cache reads at the configured discount) > none.
 - **Snapshot selection** — `snapshotForTime` picks the newest snapshot with `effectiveAt <= event time` (pre-install sessions anchor to the first snapshot once).
-- **Peak/off-peak** — before the 2026-08-17 rollout all steps price at the single list price; after it, the band is chosen by the EVENT's own time against the schedule of the pricebook's own page (the zh and en pages each parse their own peak windows, falling back to Beijing 09:00–12:00 / 14:00–18:00, everything else off-peak). Each step's band is anchored once at fold time, so the per-reply cards and chips always show the band that round was billed at — never the band of the moment you are looking.
+- **Peak/off-peak** — before the 2026-08-17 rollout all steps price at the single list price; after it, the band is chosen by the EVENT's own time against the schedule of the pricebook's own page (the zh and en pages each parse their own peak windows — the redesigned English page states UTC — falling back to Beijing 09:00–12:00 / 14:00–18:00, everything else off-peak). When the combined page has no legacy single-price column, `single` keeps anchoring to the built-in historical list; a page that still carries a separate legacy table wins. Each step's band is anchored once at fold time, so the per-reply cards and chips always show the band that round was billed at — never the band of the moment you are looking.
 - **Immutable ledger** — the `sessionCost` projection (`src/session-cost-projection.ts`) folds `request/header` (model) and usage-carrying events into per-step rows; a second usage sample for the same (turn, step) replaces the first (same-step finalization, not a re-price), with O(1) incremental totals.
 
 ## Project Structure

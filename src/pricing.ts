@@ -12,7 +12,7 @@
  * @module @gamegeek-saikel/dsh-cost-meter/pricing
  */
 
-import type { CurrentPricing, PeakHourRange, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot } from './types.ts'
+import type { CurrentPricing, PeakHourRange, PeakModelPricing, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot } from './types.ts'
 
 /** Official pricing page URL (zh-cn). */
 export const PRICING_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/'
@@ -87,14 +87,6 @@ export const FALLBACK_PEAK_USD: PeakPricing = {
   },
 }
 
-/** Number regex: `0.02`, `1`, `2`, `3.0` etc. Deliberately non-global: a
- * shared global regex leaks `lastIndex` across `exec` calls and would skip
- * the second price cell (the pro price). */
-const PRICE_RE = /(\d+(?:\.\d+)?)\s*元/
-
-/** English price regex: matches `$0.02`, `$0.002`, `0.02` etc. */
-const PRICE_RE_EN = /\$?\s*(\d+(?:\.\d+)?)/
-
 /** Strip HTML tags to plain text (keeps cell order). */
 export function stripHtml(html: string): string {
   return html
@@ -109,164 +101,254 @@ export function stripHtml(html: string): string {
     .trim()
 }
 
-/** Parse one price cell text like `0.02元` into a number; undefined when absent. */
-function parsePriceCell(text: string): number | undefined {
-  const match = PRICE_RE.exec(text)
-  if (match === null) return undefined
-  const value = Number(match[1])
-  return Number.isFinite(value) ? value : undefined
+/** Every CNY price in a cell run, in document order. */
+function priceValues(text: string): number[] {
+  const values: number[] = []
+  for (const match of text.matchAll(/(\d+(?:\.\d+)?)\s*元/g)) {
+    const value = Number(match[1])
+    if (Number.isFinite(value)) values.push(value)
+  }
+  return values
 }
 
-/** The second price cell of a row (the pro price), stripped of the first. */
-
-/** Parse one English price cell text like `$0.02` into a number. */
-function parsePriceCellUsd(text: string): number | undefined {
-  const match = PRICE_RE_EN.exec(text)
-  if (match === null) return undefined
-  const value = Number(match[1])
-  return Number.isFinite(value) ? value : undefined
+/** Every USD price in a cell run, in document order. */
+function priceValuesUsd(text: string): number[] {
+  const values: number[] = []
+  for (const match of text.matchAll(/\$?\s*(\d+(?:\.\d+)?)/g)) {
+    const value = Number(match[1])
+    if (Number.isFinite(value)) values.push(value)
+  }
+  return values
 }
 
-/** The second price cell of an English row, stripped of the first. */
-function secondPriceCellUsd(text: string): string {
-  return text.replace(/^\s*\$?\s*(\d+(?:\.\d+)?)/, '')
+/** The result of parsing one locale's pricing table(s). */
+interface LocalePricing {
+  /** The current page's list prices: legacy single-price cells, or the off-peak cells of the combined table. */
+  current: CurrentPricing
+  /** Peak/off-peak table when the page carried one. */
+  peak?: PeakPricing
+  /** The separate pre-rollout single-price table, when the page still carried it. */
+  legacyCurrent?: CurrentPricing
 }
-function secondPriceCell(text: string): string {
-  return text.replace(/^\s*(\d+(?:\.\d+)?元)/, '')
+
+/** One bucket row's parsed cells. */
+interface BucketCells {
+  cacheRead: number[]
+  input: number[]
+  output: number[]
+}
+
+/** Build the `column`-th model bucket from three bucket rows. */
+function bucketAt(cells: BucketCells, column: number): PriceBucket {
+  return {
+    cacheReadPerMillion: cells.cacheRead[column]!,
+    inputPerMillion: cells.input[column]!,
+    outputPerMillion: cells.output[column]!,
+  }
+}
+
+/** Build the current list (flash, pro, and vision when present). */
+function currentAt(cells: BucketCells, columns: number): CurrentPricing {
+  return {
+    flash: bucketAt(cells, 0),
+    pro: bucketAt(cells, 1),
+    ...(columns > 2 ? { vision: bucketAt(cells, 2) } : {}),
+  }
+}
+
+/** Build the peak/off-peak pair for the `column`-th model. */
+function peakAt(offPeakCells: BucketCells, peakCells: BucketCells, column: number): PeakModelPricing {
+  return {
+    offPeak: bucketAt(offPeakCells, column),
+    peak: bucketAt(peakCells, column),
+  }
+}
+
+/** Build the peak table (flash, pro, and vision when present). */
+function peakPricingAt(offPeakCells: BucketCells, peakCells: BucketCells, columns: number): PeakPricing {
+  return {
+    flash: peakAt(offPeakCells, peakCells, 0),
+    pro: peakAt(offPeakCells, peakCells, 1),
+    ...(columns > 2 ? { vision: peakAt(offPeakCells, peakCells, 2) } : {}),
+  }
+}
+
+/** Three bucket-row runs of the Chinese pricing table, when present. */
+const ZH_PRICING_SEGMENTS_RE = /百万tokens输入\s*[（(]\s*缓存命中\s*[）)]\s*([\s\S]*?)百万tokens输入\s*[（(]\s*缓存未命中\s*[）)]\s*([\s\S]*?)百万tokens输出\s*([\s\S]*?)(?:并发限制|扣费规则|$)/i
+
+/**
+ * Parse the Chinese pricing table(s). The 2026-08-21 page carries one
+ * combined table — bucket rows whose cells are OFF-PEAK × 3 models then
+ * PEAK × 3 models — while the earlier page carried a separate legacy
+ * single-price table plus a model-row peak table.
+ * @param html - the raw Chinese pricing page.
+ * @returns the parsed table(s), or undefined when the bucket labels are absent.
+ */
+function parseZhPricing(html: string): LocalePricing | undefined {
+  const text = stripHtml(html)
+  const hit = ZH_PRICING_SEGMENTS_RE.exec(text)
+  if (hit === null) return undefined
+  const rows = [hit[1] ?? '', hit[2] ?? '', hit[3] ?? '']
+
+  const hasBands = rows.every(row => /空闲时段/.test(row) && /高峰时段/.test(row))
+  if (hasBands) {
+    const offPeakRows = rows.map(row => {
+      const values = priceValues(row)
+      if (values.length !== 4 && values.length !== 6) return undefined
+      return values.slice(0, values.length / 2)
+    })
+    const peakRows = rows.map(row => {
+      const values = priceValues(row)
+      if (values.length !== 4 && values.length !== 6) return undefined
+      return values.slice(values.length / 2)
+    })
+    if (offPeakRows.some(row => row === undefined) || peakRows.some(row => row === undefined)) return undefined
+    const columns = offPeakRows[0]!.length
+    if (offPeakRows.some(row => row!.length !== columns)) return undefined
+    const offPeakCells: BucketCells = {
+      cacheRead: offPeakRows[0]!,
+      input: offPeakRows[1]!,
+      output: offPeakRows[2]!,
+    }
+    const peakCells: BucketCells = {
+      cacheRead: peakRows[0]!,
+      input: peakRows[1]!,
+      output: peakRows[2]!,
+    }
+    return {
+      current: currentAt(offPeakCells, columns),
+      peak: peakPricingAt(offPeakCells, peakCells, columns),
+    }
+  }
+
+  const currentRows = rows.map(priceValues)
+  const columns = currentRows[0]?.length
+  if (columns !== 2 && columns !== 3) return undefined
+  if (currentRows.some(row => row.length !== columns)) return undefined
+  const cells: BucketCells = {
+    cacheRead: currentRows[0]!,
+    input: currentRows[1]!,
+    output: currentRows[2]!,
+  }
+  const current = currentAt(cells, columns)
+  return { current, legacyCurrent: current }
 }
 
 /**
- * Parse the current single-price table: three rows labeled with the bucket
- * names, each carrying the flash and pro price cells.
+ * Parse the legacy Chinese peak-pricing table: model rows with off-peak and
+ * peak cells, e.g. `deepseek-v4-flash 空闲时段 0.05 1.5 4.5 高峰时段 0.10 3.0 9.0`.
+ * @param text - the stripped pricing page.
+ * @returns the parsed table, or undefined when either model row is absent.
+ */
+function parseLegacyPeakTableZh(text: string): PeakPricing | undefined {
+  const flash = /deepseek-v4-flash\s+空闲时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+高峰时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元/i.exec(text)
+  const pro = /deepseek-v4-pro\s+空闲时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+高峰时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元/i.exec(text)
+  if (flash === null || pro === null) return undefined
+  const model = (row: RegExpExecArray): PeakModelPricing => ({
+    offPeak: {
+      cacheReadPerMillion: Number(row[1]),
+      inputPerMillion: Number(row[2]),
+      outputPerMillion: Number(row[3]),
+    },
+    peak: {
+      cacheReadPerMillion: Number(row[4]),
+      inputPerMillion: Number(row[5]),
+      outputPerMillion: Number(row[6]),
+    },
+  })
+  const vision = /deepseek-v4-flash-vision-exp\s+空闲时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+高峰时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元/i.exec(text)
+  return {
+    flash: model(flash),
+    pro: model(pro),
+    ...(vision === null ? {} : { vision: model(vision) }),
+  }
+}
+
+/**
+ * Parse the Chinese current single-price table: three rows labeled with the
+ * bucket names, each carrying the model price cells (2 columns before
+ * 2026-08-21, 3 columns afterwards — on the combined page these are the
+ * off-peak cells).
  * @param html - the raw pricing page.
  * @returns the parsed table, or undefined when the labels are absent.
  */
 export function parseCurrentTable(html: string): CurrentPricing | undefined {
-  const hit = /百万tokens输入（缓存命中）([\s\S]{0,400}?)百万tokens输入（缓存未命中）([\s\S]{0,400}?)百万tokens输出([\s\S]{0,400}?)(?:并发限制|<\/table)/i.exec(stripHtml(html))
-  if (hit === null) return undefined
-  const cacheReadCell = hit[1] ?? ''
-  const inputCell = hit[2] ?? ''
-  const outputCell = hit[3] ?? ''
-  const cacheReadFlash = parsePriceCell(cacheReadCell)
-  const cacheReadPro = parsePriceCell(secondPriceCell(cacheReadCell))
-  const inputFlash = parsePriceCell(inputCell)
-  const inputPro = parsePriceCell(secondPriceCell(inputCell))
-  const outputFlash = parsePriceCell(outputCell)
-  const outputPro = parsePriceCell(secondPriceCell(outputCell))
-  if (cacheReadFlash === undefined || inputFlash === undefined || outputFlash === undefined) {
-    return undefined
-  }
-  return {
-    flash: {
-      cacheReadPerMillion: cacheReadFlash,
-      inputPerMillion: inputFlash,
-      outputPerMillion: outputFlash,
-    },
-    pro: {
-      cacheReadPerMillion: cacheReadPro ?? cacheReadFlash,
-      inputPerMillion: inputPro ?? inputFlash,
-      outputPerMillion: outputPro ?? outputFlash,
-    },
-  }
+  return parseZhPricing(html)?.current
 }
 
 /**
- * Parse the upcoming peak-pricing table: model rows with off-peak and peak
- * cells, e.g. `deepseek-v4-flash 空闲时段 0.05 1.5 4.5 高峰时段 0.10 3.0 9.0`.
+ * Parse the Chinese peak-pricing table: either the PEAK cells of the
+ * 2026-08-21 combined table, or the earlier separate model-row table.
  * @param html - the raw pricing page.
- * @returns the parsed table, or undefined when either model row is absent.
+ * @returns the parsed table, or undefined when neither peak table is present.
  */
 export function parsePeakTable(html: string): PeakPricing | undefined {
-  const text = stripHtml(html)
-  const flash = /deepseek-v4-flash\s+空闲时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+高峰时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元/i.exec(text)
-  const pro = /deepseek-v4-pro\s+空闲时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+高峰时段\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元\s+(\d+(?:\.\d+)?)元/i.exec(text)
-  if (flash === null || pro === null) return undefined
-  return {
-    flash: {
-      offPeak: {
-        cacheReadPerMillion: Number(flash[1]),
-        inputPerMillion: Number(flash[2]),
-        outputPerMillion: Number(flash[3]),
-      },
-      peak: {
-        cacheReadPerMillion: Number(flash[4]),
-        inputPerMillion: Number(flash[5]),
-        outputPerMillion: Number(flash[6]),
-      },
-    },
-    pro: {
-      offPeak: {
-        cacheReadPerMillion: Number(pro[1]),
-        inputPerMillion: Number(pro[2]),
-        outputPerMillion: Number(pro[3]),
-      },
-      peak: {
-        cacheReadPerMillion: Number(pro[4]),
-        inputPerMillion: Number(pro[5]),
-        outputPerMillion: Number(pro[6]),
-      },
-    },
-  }
+  const combined = parseZhPricing(html)
+  return combined?.peak ?? parseLegacyPeakTableZh(stripHtml(html))
 }
 
+/** Three bucket-row runs of the English pricing table, when present. */
+const EN_PRICING_SEGMENTS_RE = /1M\s+INPUT\s+TOKENS\s*[（(]?\s*CACHE\s+HIT\s*[）)]?\s*([\s\S]*?)1M\s+INPUT\s+TOKENS\s*[（(]?\s*CACHE\s+MISS\s*[）)]?\s*([\s\S]*?)1M\s+OUTPUT\s+TOKENS\s*([\s\S]*?)(?:Concurrency\s+Limit|Deduction\s+Rules|$)/i
+
 /**
- * Parse the English current single-price table.
- * @param html - the raw English pricing page.
- * @returns the parsed table, or undefined when the labels are absent.
+ * Parse the English pricing table(s). The 2026-08-21 page lists all three
+ * buckets as rows with OFF-PEAK and PEAK cells (2 model columns before the
+ * update, 3 afterwards); earlier pages carried a plain single-price table.
  */
-/**
- * Parse the English combined pricing table. The English page lists all three
- * buckets as rows with OFF-PEAK and PEAK cells, so we extract both the current
- * off-peak list and the peak table from the same markup.
- */
-function parseEnglishPricing(html: string): { current: CurrentPricing; peak: PeakPricing } | undefined {
+function parseEnglishPricing(html: string): LocalePricing | undefined {
   const text = stripHtml(html)
-  const hit = /1M INPUT TOKENS \(CACHE HIT\)\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+1M INPUT TOKENS \(CACHE MISS\)\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+1M OUTPUT TOKENS\s+OFF-PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)\s+PEAK\s+\$?\s*(\d+(?:\.\d+)?)\s+\$?\s*(\d+(?:\.\d+)?)/i.exec(text)
+  const hit = EN_PRICING_SEGMENTS_RE.exec(text)
   if (hit === null) return undefined
-  const n = (index: number): number => Number(hit[index])
-  const current: CurrentPricing = {
-    flash: {
-      cacheReadPerMillion: n(1),
-      inputPerMillion: n(5),
-      outputPerMillion: n(9),
-    },
-    pro: {
-      cacheReadPerMillion: n(2),
-      inputPerMillion: n(6),
-      outputPerMillion: n(10),
-    },
+  const rows = [hit[1] ?? '', hit[2] ?? '', hit[3] ?? '']
+
+  const hasBands = rows.every(row =>
+    /\bOFF-PEAK\b/i.test(row) && /(?:^|\s)PEAK(?:\s|$)/i.test(row))
+  if (hasBands) {
+    const offPeakRows = rows.map(row => {
+      const values = priceValuesUsd(row)
+      if (values.length !== 4 && values.length !== 6) return undefined
+      return values.slice(0, values.length / 2)
+    })
+    const peakRows = rows.map(row => {
+      const values = priceValuesUsd(row)
+      if (values.length !== 4 && values.length !== 6) return undefined
+      return values.slice(values.length / 2)
+    })
+    if (offPeakRows.some(row => row === undefined) || peakRows.some(row => row === undefined)) return undefined
+    const columns = offPeakRows[0]!.length
+    if (offPeakRows.some(row => row!.length !== columns)) return undefined
+    const offPeakCells: BucketCells = {
+      cacheRead: offPeakRows[0]!,
+      input: offPeakRows[1]!,
+      output: offPeakRows[2]!,
+    }
+    const peakCells: BucketCells = {
+      cacheRead: peakRows[0]!,
+      input: peakRows[1]!,
+      output: peakRows[2]!,
+    }
+    return {
+      current: currentAt(offPeakCells, columns),
+      peak: peakPricingAt(offPeakCells, peakCells, columns),
+    }
   }
-  const peak: PeakPricing = {
-    flash: {
-      offPeak: {
-        cacheReadPerMillion: n(1),
-        inputPerMillion: n(5),
-        outputPerMillion: n(9),
-      },
-      peak: {
-        cacheReadPerMillion: n(3),
-        inputPerMillion: n(7),
-        outputPerMillion: n(11),
-      },
-    },
-    pro: {
-      offPeak: {
-        cacheReadPerMillion: n(2),
-        inputPerMillion: n(6),
-        outputPerMillion: n(10),
-      },
-      peak: {
-        cacheReadPerMillion: n(4),
-        inputPerMillion: n(8),
-        outputPerMillion: n(12),
-      },
-    },
+
+  const currentRows = rows.map(priceValuesUsd)
+  const columns = currentRows[0]?.length
+  if (columns !== 2 && columns !== 3) return undefined
+  if (currentRows.some(row => row.length !== columns)) return undefined
+  const cells: BucketCells = {
+    cacheRead: currentRows[0]!,
+    input: currentRows[1]!,
+    output: currentRows[2]!,
   }
-  return { current, peak }
+  const current = currentAt(cells, columns)
+  return { current, legacyCurrent: current }
 }
 
 /**
- * Parse the English current single-price table.
+ * Parse the English current single-price table (or the off-peak cells of the
+ * combined table).
  * @param html - the raw English pricing page.
  * @returns the parsed table, or undefined when the labels are absent.
  */
@@ -275,7 +357,7 @@ export function parseCurrentTableEn(html: string): CurrentPricing | undefined {
 }
 
 /**
- * Parse the English upcoming peak-pricing table.
+ * Parse the English peak-pricing table.
  * @param html - the raw English pricing page.
  * @returns the parsed table, or undefined when either model row is absent.
  */
@@ -299,10 +381,13 @@ const SCHEDULE_WINDOWS_RE = /(\d{1,2}):(\d{2})\s*[-–—~至]\s*(\d{1,2}):(\d{2
  */
 export function parsePeakSchedule(html: string, locale: 'zh' | 'en' = 'zh'): PeakSchedule | undefined {
   const text = stripHtml(html)
-  const label = locale === 'zh' ? '高峰时段' : /peak\s*hours?/i
-  const labelIndex = typeof label === 'string' ? text.indexOf(label) : text.search(label)
-  if (labelIndex < 0) return undefined
-  const window = text.slice(labelIndex, labelIndex + 200)
+  // The pricing table itself repeats `高峰时段` as a band label, so the zh
+  // search targets the schedule sentence (the label followed by a time).
+  const labelMatch = locale === 'zh'
+    ? /高峰时段[^。]{0,160}?\d{1,2}:\d{2}/i.exec(text)
+    : /peak\s*hours?/i.exec(text)
+  if (labelMatch === null) return undefined
+  const window = text.slice(labelMatch.index, labelMatch.index + 220)
   const match = SCHEDULE_WINDOWS_RE.exec(window)
   if (match === null) return undefined
   const ranges: PeakHourRange[] = [
@@ -336,8 +421,6 @@ export async function fetchPricing(
   const fetchedAt = Date.now()
   const currency = locale === 'en' ? 'USD' : 'CNY'
   const url = locale === 'en' ? PRICING_URL_EN : PRICING_URL
-  const parseCurrent = locale === 'en' ? parseCurrentTableEn : parseCurrentTable
-  const parsePeak = locale === 'en' ? parsePeakTableEn : parsePeakTable
   const fallbackCurrent = locale === 'en' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT
   const fallbackPeak = locale === 'en' ? FALLBACK_PEAK_USD : FALLBACK_PEAK
   const fallbackSchedule = locale === 'en' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH
@@ -354,11 +437,12 @@ export async function fetchPricing(
       return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: `pricing page HTTP ${response.status}` }
     }
     const html = await response.text()
-    const current = parseCurrent(html)
-    if (current === undefined) {
+    const parsed = locale === 'en' ? parseEnglishPricing(html) : parseZhPricing(html)
+    if (parsed === undefined) {
       return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: 'pricing table not found' }
     }
-    const peak = parsePeak(html)
+    const peak = parsed.peak ?? (locale === 'en' ? parsePeakTableEn(html) : parsePeakTable(html))
+    const { current, legacyCurrent } = parsed
     const schedule = parsePeakSchedule(html, locale) ?? fallbackSchedule
     const now = Date.now()
     const peakActive = now >= PEAK_PRICING_START_MS
@@ -366,6 +450,7 @@ export async function fetchPricing(
       fetchedAt,
       currency,
       current,
+      ...(legacyCurrent === undefined ? {} : { legacyCurrent }),
       ...(peak === undefined ? {} : { peak }),
       peakActive,
       effective: effectivePricing(current, peak, peakActive, new Date(now), schedule),
@@ -421,7 +506,7 @@ export function effectiveBucket(
   peak: PeakPricing | undefined,
   peakActive: boolean,
   now: Date,
-  model: keyof CurrentPricing,
+  model: 'flash' | 'pro',
   schedule: PeakSchedule = PEAK_SCHEDULE_ZH,
 ): PriceBucket {
   if (peakActive) {

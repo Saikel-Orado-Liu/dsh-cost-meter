@@ -193,6 +193,29 @@ describe('computePricebook priority chain', () => {
     expect(prices.pro?.peak).toEqual(FALLBACK_PEAK.pro.peak)
   })
 
+  it('keeps the built-in pre-rollout list for single and adds the vision key from the updated page', () => {
+    const updatedCurrent: CurrentPricing = {
+      ...FALLBACK_CURRENT,
+      vision: FALLBACK_CURRENT.flash,
+    }
+    const updatedPeak = {
+      ...FALLBACK_PEAK,
+      vision: FALLBACK_PEAK.flash,
+    }
+    // The combined page has no legacy table; current only carries off-peak.
+    const { prices } = computePricebook(
+      state,
+      { current: updatedCurrent, peak: updatedPeak },
+      null, 7.2, 7.2,
+    )
+    expect(prices.flash?.single).toEqual(FALLBACK_CURRENT.flash)
+    const vision = prices['deepseek-v4-flash-vision-exp']
+    expect(vision?.source).toBe('official')
+    expect(vision?.single).toEqual(FALLBACK_CURRENT.flash)
+    expect(vision?.offPeak).toEqual(FALLBACK_PEAK.flash.offPeak)
+    expect(vision?.peak).toEqual(FALLBACK_PEAK.flash.peak)
+  })
+
   it('marks the fallback source when the official fetch failed', () => {
     const { prices, primarySource } = computePricebook(
       state, { current: FALLBACK_CURRENT, error: 'ECONNREFUSED' }, null, 7.2, 7.2,
@@ -307,14 +330,14 @@ describe('PricebookHandle refresh and mutation', () => {
     expect(handle.state.snapshots).toHaveLength(1)
   })
 
-  it('starts a new snapshot when a price actually changes', async () => {
+  it('starts a new snapshot when the legacy single-price table changes', async () => {
     const handle = handleWith(initialPricebookState())
     await handle.refresh({ official: OFFICIAL })
     const changed: CurrentPricing = {
       flash: { cacheReadPerMillion: 0.03, inputPerMillion: 1.2, outputPerMillion: 2.4 },
       pro: FALLBACK_CURRENT.pro,
     }
-    await handle.refresh({ official: { ...OFFICIAL, current: changed } })
+    await handle.refresh({ official: { ...OFFICIAL, legacyCurrent: changed } })
     expect(handle.state.snapshots).toHaveLength(2)
     expect(handle.currentSnapshot()?.version).toBe(2)
     expect(handle.currentSnapshot()?.prices.flash?.single?.inputPerMillion).toBe(1.2)
