@@ -125,6 +125,12 @@ export interface PeakSchedule {
   timezone: string
   /** Half-open peak windows in `timezone` wall-clock hours. */
   ranges: readonly PeakHourRange[]
+  /**
+   * True when the page restricts the peak windows to Monday–Friday; the
+   * official pages added this restriction on 2026-08-21, making Saturdays
+   * and Sundays off-peak all day in the schedule's own timezone.
+   */
+  weekdaysOnly?: boolean
 }
 
 /**

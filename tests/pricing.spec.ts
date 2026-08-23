@@ -63,7 +63,7 @@ const PAGE_HTML_EN = `
 const PAGE_HTML_2026_ZH = `
 <html><body>
 <h1>模型 &amp; 价格</h1>
-<p>高峰时段为北京时间 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）</p>
+<p>高峰时段为北京时间周一至周五 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）</p>
 <table>
 <tr><td rowspan="2">百万tokens输入
 （缓存命中）</td><td>空闲时段</td><td>0.05元</td><td>0.15元</td><td>0.05元</td></tr>
@@ -83,7 +83,7 @@ const PAGE_HTML_2026_ZH = `
 const PAGE_HTML_2026_EN = `
 <html><body>
 <h1>Models &amp; Pricing</h1>
-<p>Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC</p>
+<p>Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC, Monday through Friday (all other hours are off-peak)</p>
 <table>
 <tr><td rowspan="2">1M INPUT TOKENS
 (CACHE HIT)</td><td>OFF-PEAK</td><td>$0.007</td><td>$0.022</td><td>$0.007</td></tr>
@@ -202,7 +202,7 @@ describe('updated 2026-08-21 combined table', () => {
         peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
       },
     })
-    expect(parsePeakSchedule(PAGE_HTML_2026_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
+    expect(parsePeakSchedule(PAGE_HTML_2026_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 
   it('folds the updated zh page into a clean official snapshot', async () => {
@@ -232,7 +232,7 @@ describe('updated 2026-08-21 combined table', () => {
     expect(snapshot.current.vision).toEqual(snapshot.current.flash)
     expect(snapshot.peak?.vision?.peak.outputPerMillion).toBe(1.32)
     expect(snapshot.legacyCurrent).toBeUndefined()
-    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
+    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 })
 
@@ -267,7 +267,7 @@ describe('fetchPricing', () => {
     expect(snapshot.current.flash).toEqual(FALLBACK_CURRENT.flash)
     expect(snapshot.peak?.pro.peak.outputPerMillion).toBe(27)
     expect(snapshot.error).toBeUndefined()
-    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_ZH)
+    expect(snapshot.schedule).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
   })
 
   it('folds the English page into a USD snapshot when locale is en', async () => {
@@ -280,7 +280,7 @@ describe('fetchPricing', () => {
     expect(snapshot.currency).toBe('USD')
     expect(snapshot.current.flash.inputPerMillion).toBe(0.22)
     expect(snapshot.peak?.flash.peak.inputPerMillion).toBe(0.44)
-    expect(snapshot.schedule).toEqual(PEAK_SCHEDULE_EN)
+    expect(snapshot.schedule).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
     expect(fetchImpl).toHaveBeenCalledWith(PRICING_URL_EN, expect.anything())
   })
 
@@ -329,6 +329,20 @@ describe('isPeakHour', () => {
     expect(isPeakHour(at(13))).toBe(false)
     expect(isPeakHour(at(18))).toBe(false)
     expect(isPeakHour(at(23))).toBe(false)
+  })
+
+  it('keeps Saturdays and Sundays off-peak all day under a weekdays-only schedule', () => {
+    // 2026-08-22 is a Saturday; 2026-08-23 is a Sunday.
+    expect(isPeakHour(new Date('2026-08-22T02:00:00Z'))).toBe(false) // 10:00 Beijing
+    expect(isPeakHour(new Date('2026-08-23T06:00:00Z'))).toBe(false) // 14:00 Beijing
+    const utcSchedule = { timezone: 'UTC', ranges: [[1, 4], [6, 10]] as const, weekdaysOnly: true }
+    expect(isPeakHour(new Date('2026-08-22T02:00:00Z'), utcSchedule)).toBe(false) // UTC peak window
+    expect(isPeakHour(new Date('2026-08-23T07:00:00Z'), utcSchedule)).toBe(false) // UTC peak window
+  })
+
+  it('keeps applying a schedule without the weekdays-only restriction on weekends', () => {
+    const utcSchedule = { timezone: 'UTC', ranges: [[0, 6]] as const }
+    expect(isPeakHour(new Date('2026-08-22T02:00:00Z'), utcSchedule)).toBe(true)
   })
 
   it('classifies against a custom (locale) schedule instead of the zh default', () => {

@@ -25,22 +25,25 @@ export const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0)
 
 /**
  * Built-in fallback zh peak schedule: the official announcement's windows in
- * Beijing time (peak 09:00-12:00 / 14:00-18:00, everything else off-peak).
+ * Beijing time (peak 09:00-12:00 / 14:00-18:00, Monday–Friday; everything
+ * else, including all of Saturday and Sunday, off-peak).
  */
 export const PEAK_SCHEDULE_ZH: PeakSchedule = {
   timezone: 'Asia/Shanghai',
   ranges: [[9, 12], [14, 18]],
+  weekdaysOnly: true,
 }
 
 /**
  * Built-in fallback en peak schedule. Kept as a separate constant from the zh
- * schedule because the English pricing page may state different windows or a
- * different timezone; each pricebook parses its own page and falls back to
- * this locale-matched default only when the page carries no schedule.
+ * schedule because the English pricing page states the same windows in UTC;
+ * each pricebook parses its own page and falls back to this locale-matched
+ * default only when the page carries no schedule.
  */
 export const PEAK_SCHEDULE_EN: PeakSchedule = {
-  timezone: 'Asia/Shanghai',
-  ranges: [[9, 12], [14, 18]],
+  timezone: 'UTC',
+  ranges: [[1, 4], [6, 10]],
+  weekdaysOnly: true,
 }
 
 /**
@@ -371,10 +374,10 @@ const SCHEDULE_WINDOWS_RE = /(\d{1,2}):(\d{2})\s*[-–—~至]\s*(\d{1,2}):(\d{2
 /**
  * Parse the peak-hour schedule from a pricing page: the two half-open
  * windows next to the localized peak label (`高峰时段` / `peak hours`), plus
- * the timezone the windows are expressed in. The Chinese page states Beijing
- * time; the English page may state Beijing time or UTC — a Beijing/UTC+8
- * mention wins, a bare UTC mention selects UTC, anything else defaults to
- * Beijing time.
+ * the timezone the windows are expressed in and the Monday–Friday
+ * restriction when the page states one. The Chinese page states Beijing
+ * time; the English page states UTC — a Beijing/UTC+8 mention wins, a bare
+ * UTC mention selects UTC, anything else defaults to Beijing time.
  * @param html - the raw pricing page.
  * @param locale - which page's wording to look for.
  * @returns the parsed schedule, or undefined when the page carries none.
@@ -398,13 +401,15 @@ export function parsePeakSchedule(html: string, locale: 'zh' | 'en' = 'zh'): Pea
     !Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > 24 || start >= end)) {
     return undefined
   }
+  const weekdaysOnly = /(?:周一|星期[一二三四五]|工作日)/.test(window)
+    || /\b(?:Monday\s+through\s+Friday|weekdays?)\b/i.test(window)
   if (/\b(?:beijing|北京时间|china standard)\b/i.test(window) || /\butc\s*\+\s*8\b/i.test(window)) {
-    return { timezone: 'Asia/Shanghai', ranges }
+    return { timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
   }
   if (/\butc\b/i.test(window)) {
-    return { timezone: 'UTC', ranges }
+    return { timezone: 'UTC', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
   }
-  return { timezone: 'Asia/Shanghai', ranges }
+  return { timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
 }
 
 /**
@@ -473,7 +478,9 @@ export async function fetchPricing(
 /**
  * Whether the given instant is a peak-pricing hour under one schedule: the
  * zh fallback is Beijing time 09:00-12:00 and 14:00-18:00; each pricebook
- * passes the schedule parsed from its own (zh or en) pricing page.
+ * passes the schedule parsed from its own (zh or en) pricing page. When the
+ * schedule is Monday–Friday only, Saturdays and Sundays in the schedule's
+ * timezone are off-peak all day.
  * @param now - the instant to classify.
  * @param schedule - the peak-hour schedule to classify against.
  * @returns true during peak hours.
@@ -483,7 +490,12 @@ export function isPeakHour(now: Date = new Date(), schedule: PeakSchedule = PEAK
     timeZone: schedule.timezone,
     hour: 'numeric',
     hour12: false,
+    weekday: 'short',
   }).formatToParts(now)
+  if (schedule.weekdaysOnly === true) {
+    const weekday = parts.find(part => part.type === 'weekday')?.value
+    if (weekday === 'Sat' || weekday === 'Sun') return false
+  }
   const hour = Number(parts.find(part => part.type === 'hour')?.value)
   if (Number.isNaN(hour)) return false
   return schedule.ranges.some(([start, end]) => hour >= start && hour < end)
