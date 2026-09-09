@@ -50,4 +50,8 @@ jobs:
 
       - name: Publish to npm
         if: steps.check.outputs.skip != 'true'
-        run: npm publish --provenance --access public
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG=latest
+          case "$PKG_VERSION" in *-*) TAG=alpha ;; esac
+          npm publish --provenance --access public --tag "$TAG"
