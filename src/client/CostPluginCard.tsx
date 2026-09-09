@@ -11,7 +11,7 @@
 import { memo, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { Button, IconChevronDownOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { ConversationCostResponse } from '../types.ts'
 import { formatTime } from './format.ts'
 import css from './CostPluginCard.module.css'

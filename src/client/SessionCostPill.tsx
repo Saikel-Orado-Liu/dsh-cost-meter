@@ -13,9 +13,10 @@
  * character heuristic — both at CURRENT snapshot prices.
  */
 import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the contextPressure key into SessionProjectionMap.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
@@ -28,14 +29,14 @@ import css from './SessionCostPill.module.css'
 export type PillLocale = PropsLocale<'cost-meter'>['t']
 
 export interface SessionCostPillProps {
-  useSession: SnapshotSelectorHook<ConversationSnapshot>
+  useSession: SnapshotSelectorHook<SessionSnapshot>
   useProjection: UseProjection
   sessionId: string
   t: PillLocale
 }
 
-/** Read the conversation's running flag (the pill's estimate gate). */
-function runningOf(snapshot: ConversationSnapshot): boolean {
+/** Read the session's running flag (the pill's estimate gate). */
+function runningOf(snapshot: SessionSnapshot): boolean {
   return snapshot.running
 }
 
@@ -68,7 +69,11 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const cost = currency === 'USD' ? costUsd : costCny
   const pressure = useProjection('contextPressure')
   const running = useSession(runningOf)
-  const partial = useSession(snapshot => snapshot.partial)
+  // DSH 0.1.5 no longer exposes the streaming partial message to plugins
+  // (streams are folded into the durable assistant/message event); the live
+  // estimate therefore projects the running reply's input side only and
+  // leaves its output unestimated.
+  const partial = null
   const [open, setOpen] = useState(false)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -113,7 +118,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
     if (bucket === undefined) return null
     const inputTokens = pressure?.projectedTokens ?? pressure?.pressureTokens ?? 0
     const cachedRatio = cacheReadRatioOf(projection.steps)
-    const outputTokens = blocksOutputTokens(partial?.blocks)
+    const outputTokens = 0
     const stepEstimate = estimateCost(bucket, inputTokens, cachedRatio, outputTokens)
     return (combined?.cost ?? 0) + stepEstimate
   }, [running, projection, combined, snapshot, schedule, model, pressure, partial, currency])

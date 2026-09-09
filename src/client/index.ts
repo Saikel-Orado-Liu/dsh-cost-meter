@@ -1,16 +1,24 @@
 /**
  * Cost-meter plugin, browser half: contributes the cost surfaces —
  * the composer-dock readout (anchored session spend + account balance), the
- * Cost view tab, the per-reply cost chip, the header pill with the live
- * streaming estimate, and the plugin configuration card (设置 → 插件). The
- * anchored ledger arrives through the `sessionCost` projection; the balance
- * and the pricebook arrive over the trust-fenced host `/cost-meter`
- * route; the editable configuration binds the `cost-meter` settings
- * namespace through the standard settings scope.
+ * Cost view tab, the per-reply cost at the end of each completed Turn's
+ * timing row, the header pill with the live streaming estimate, and the
+ * plugin configuration card (设置 → 插件). The anchored ledger arrives
+ * through the `sessionCost` projection; the balance and the pricebook arrive
+ * over the trust-fenced host `/cost-meter` route; the editable configuration
+ * binds the `cost-meter` settings namespace through the standard settings
+ * scope.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ui-conversation SlotMap merge (composer.dock etc.).
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+// Type-only: pulls the ui-session standard-props merge (useSession /
+// useProjection / sessionId seats) and the ui-chat SlotMap merge
+// (conversation.chat.turnTail).
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+// Type-only: pulls the ui-renderer Context augmentation (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the settings-domain SlotMap merges (settings.plugin.item)
 // and the settingsScope service.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
@@ -70,13 +78,16 @@ export function apply(ctx: ClientContext): void {
     }, CostView),
   )
 
-  // Per-reply cost chip (after the feedback action at order 10).
+  // Per-reply cost at the END of a completed Turn's timing row
+  // (用时 · 日期): the turnTail chain renders after the timing facts and
+  // before the action row. DSH 0.1.5 closed the per-message assistant-actions
+  // slot, so the cost is addressed per Turn; the selector declines open turns
+  // and the tail stays empty while the reply is in flight.
   ctx.slots.inject(
-    'conversation.chat.assistant-actions',
+    'conversation.chat.turnTail',
     () => ctx.slots.register({
-      name: 'conversation.chat.assistant-actions',
-      id: 'cost',
-      order: 20,
+      name: 'conversation.chat.turnTail',
+      select: (owner) => owner.turn.status === 'closed' ? { turn: owner.turn.turn } : null,
       locale: NS,
     }, AssistantCostChip),
   )

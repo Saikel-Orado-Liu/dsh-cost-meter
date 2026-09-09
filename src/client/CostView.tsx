@@ -8,7 +8,7 @@
  * is recomputed at current prices.
  */
 import { memo, useEffect, useState } from 'react'
-import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
 import { bandForTime, combineTotals, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'

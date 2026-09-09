@@ -12,26 +12,26 @@
  * cannot rewrite an already-written row — the ledger grows, it never
  * mutates.
  *
- * A `request/header` event records the session's model; the usage events
- * (`assistant/chunk` with `chunk.type === 'usage'`, and `assistant/message`
- * with `usage`) price that step with the recorded model. A second usage
- * sample for the same (turn, step) replaces the first — same-step usage
- * finalization, not a re-price: both samples anchor at their own event
- * times, and the final `assistant/message` sample is authoritative. The
- * totals subtract the replaced step and add the replacement.
+ * A `request/context` event records the session's model; the usage event
+ * (`assistant/message` with `usage`) prices that step with the recorded
+ * model. A second usage sample for the same (turn, step) replaces the first
+ * — same-step usage finalization, not a re-price: both samples anchor at
+ * their own event times, and the final `assistant/message` sample is
+ * authoritative. The totals subtract the replaced step and add the
+ * replacement. DSH 0.1.5 absorbed the old `assistant/chunk` stream events
+ * into the single `assistant/message` event (embedded `stream` + `usage`).
  *
  * @module @gamegeek-saikel/dsh-cost-meter/session-cost-projection
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import { canonicalHeader } from '@deepseek-ai/dsh-session'
 import { z } from 'zod'
 import { stepCost, type PricebookHandle, type StepUsage } from './pricebook.ts'
 import type { SessionCostProjection, SessionCostStep, SessionCostTotals, UnpricedReason } from './types.ts'
 
 /** Internal fold state: model + the immutable per-step ledger + totals. */
 export interface SessionCostState {
-  /** Last model seen in a `request/header`. */
+  /** Last model seen in a `request/context`. */
   model: { provider: string; model: string } | null
   /** Per-step ledger keyed `${turn}:${step}`. */
   steps: Record<string, SessionCostStep>
@@ -167,9 +167,8 @@ export function foldSessionCost(
   event: SessionEvent,
   pricebook: PricebookHandle,
 ): SessionCostState {
-  if (event.type === 'request/header') {
-    const header = canonicalHeader(event.data.header)
-    const model = { provider: header.config.provider, model: header.config.model }
+  if (event.type === 'request/context') {
+    const model = { provider: event.data.provider, model: event.data.model }
     if (state.model !== null && state.model.provider === model.provider && state.model.model === model.model) return state
     return { ...state, model }
   }
@@ -177,11 +176,7 @@ export function foldSessionCost(
   let turn: number
   let step: number
   let usage: UsageLike
-  if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
-    turn = event.data.turn
-    step = event.data.step
-    usage = event.data.chunk.usage
-  } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
+  if (event.type === 'assistant/message' && event.data.usage !== undefined) {
     turn = event.data.turn
     step = event.data.step
     usage = event.data.usage

@@ -12,9 +12,8 @@
  */
 import { memo, useEffect, useMemo, useState } from 'react'
 import { Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../types.ts'
 import { combineTotals, subagentSpend } from './cost-math.ts'
@@ -30,7 +29,6 @@ export const REFRESH_MS = 60_000
 export type CostLocale = PropsLocale<'cost-meter'>['t']
 
 export interface SessionCostLineProps {
-  useSession: SnapshotSelectorHook<ConversationSnapshot>
   useProjection: UseProjection
   sessionId: string
   t: CostLocale

@@ -21,7 +21,7 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-credentials'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type { SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import { fetchPricing } from './pricing.ts'
 import {
   DEFAULT_ALIASES,
@@ -304,7 +304,7 @@ interface SettingsAction {
 }
 
 /** The `cost-meter` settings namespace (plugin configuration page). */
-export const SETTINGS_NAMESPACE = settingsNamespace('cost-meter')
+export const SETTINGS_NAMESPACE = 'cost-meter' as SettingsNamespace
 
 /**
  * Mount the plugin: open the pricebook domain, refresh every remote source,
@@ -347,16 +347,19 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
 
   // ── Plugin configuration section: the settings page renders the standard
   //  card; every resolved change is applied to both pricebooks and re-anchors.
-  let currentSettings: () => Config = () => config ?? {}
-  installSettingsSection(ctx, SETTINGS_NAMESPACE, Config, (config ?? {}) as never, {
-    setSource: (source) => {
-      currentSettings = source as () => Config
-    },
-    onChange: () => {
-      const settings = currentSettings()
-      pricebookCny.applySettings(settings)
-      pricebookUsd.applySettings(settings)
-    },
+  //  DSH 0.1.5 exposes namespace validation and registration directly on the
+  //  settings service; the old settingsNamespace/installSettingsSection
+  //  helpers are no longer part of that public runtime surface.
+  const applySettings = (settings: Config): void => {
+    pricebookCny.applySettings(settings)
+    pricebookUsd.applySettings(settings)
+  }
+  ctx.inject(['settings'], (settingsCtx) => {
+    const scope = settingsCtx.settings.register(SETTINGS_NAMESPACE, Config, {
+      base: (config ?? {}) as Config,
+    })
+    applySettings(scope.get())
+    scope.watch((next) => applySettings(next))
   })
 
   // ── sessionCost projections: anchored per-step ledgers for CNY and USD. ──

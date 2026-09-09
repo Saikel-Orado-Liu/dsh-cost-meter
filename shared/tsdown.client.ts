@@ -46,15 +46,14 @@ const SKIP_WORKSPACE_BUILD: UserConfig = { entry: '' }
 
 /**
  * Documented TEMPORARY exemption, not a platform module (hence not in
- * web-platform.ts): the snapshot-store engine (createSnapshotStore/defineStore/
- * shallowEqual) lives in runtime pending its promotion-time rehoming, and
- * five importers (locale, ui-layout, ui-conversation ×3) ride this single
- * exemption. At runtime the lazy CJS table answers the require natively:
- * runtime is an immediately-tier row, its factory is registered before any
- * dependent bundle materializes. TODO(webload/store-rehome): remove with the
- * store-engine relocation follow-up.
+ * web-platform.ts): DSH 0.1.5 rehomed the snapshot-store engine into the
+ * standalone dsh-client-store package, which the plugin inject list seeds
+ * into the loader module table. At runtime the lazy CJS table answers the
+ * require natively: the store package is an immediately-tier row, its
+ * factory is registered before any dependent bundle materializes.
+ * TODO(webload/store-rehome): remove with the promoted platform-module entry.
  */
-const RUNTIME_STORE_EXEMPTION = '@deepseek-ai/dsh-client-runtime/client'
+const RUNTIME_STORE_EXEMPTION = '@deepseek-ai/dsh-client-store'
 
 /** Externals resolved from the loader module table: the platform seed entries plus the documented runtime exemption. */
 export const CLIENT_EXTERNALS: readonly string[] = [...PLATFORM_MODULES, RUNTIME_STORE_EXEMPTION]

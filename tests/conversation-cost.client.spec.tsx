@@ -20,7 +20,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
 })
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../src/types.ts'
-import { AssistantCostChip, stepOf, stepOfMessage } from '../src/client/AssistantCostChip.tsx'
+import { AssistantCostChip, stepOf, stepsOfTurn } from '../src/client/AssistantCostChip.tsx'
 import { cacheReadRatioOf, estimateCost, estimateTokens, peakOffPeakMultiplier } from '../src/client/cost-math.ts'
 import { CostPluginCard } from '../src/client/CostPluginCard.tsx'
 import { CostView } from '../src/client/CostView.tsx'
@@ -174,18 +174,6 @@ function zhT(key: string, params?: Record<string, string>): string {
   return text
 }
 
-function snapshotWithNodes(nodes: unknown[]) {
-  return {
-    running: false,
-    partial: null,
-    chat: { legacy: { nodes } },
-  } as never
-}
-
-function assistantNode(messageId: string, turn = 1, step = 1) {
-  return { kind: 'assistant', seq: turn * 10 + step, messageId, turn, step, provenance: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }
-}
-
 function stubFetch(body: unknown): ReturnType<typeof vi.fn> {
   const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => body })
   vi.stubGlobal('fetch', fetchImpl)
@@ -264,11 +252,10 @@ describe('peakOffPeakMultiplier and formatMultiplier', () => {
   })
 })
 
-describe('stepOfMessage / stepOf', () => {
-  it('locates the node by messageId and addresses the ledger', () => {
-    const snapshot = snapshotWithNodes([assistantNode('m1', 2, 3)])
-    expect(stepOfMessage(snapshot, 'm1' as never)).toEqual({ turn: 2, step: 3 })
-    expect(stepOfMessage(snapshot, 'missing' as never)).toBeNull()
+describe('stepsOfTurn / stepOf', () => {
+  it('filters the ledger by turn and addresses it by coordinates', () => {
+    expect(stepsOfTurn(PROJECTION.steps, 1).map(s => `${s.turn}:${s.step}`)).toEqual(['1:1'])
+    expect(stepsOfTurn(PROJECTION.steps, 9)).toEqual([])
     expect(stepOf(PROJECTION.steps, 1, 1)?.cost).toBe(3.02)
     expect(stepOf(PROJECTION.steps, 9, 9)).toBeUndefined()
   })
@@ -279,7 +266,6 @@ describe('SessionCostLine', () => {
     stubFetch(RESPONSE)
     const useProjection = () => PROJECTION as never
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
       useProjection={useProjection as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -290,7 +276,6 @@ describe('SessionCostLine', () => {
   it('combines subagent costs into the breakdowns and shows the subagent total', async () => {
     stubFetch({ ...RESPONSE, subagents: [SUBAGENT] })
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -302,7 +287,6 @@ describe('SessionCostLine', () => {
   it('hides the balance when the pricebook toggle disables it', async () => {
     stubFetch({ ...RESPONSE, pricebook: { ...RESPONSE.pricebook, balanceEnabled: false } })
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -318,7 +302,6 @@ describe('SessionCostLine', () => {
     // must not disappear, so the row renders CNY 0.00 instead.
     stubFetch({ ...RESPONSE, balance: null })
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
       useProjection={() => undefined as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -333,7 +316,6 @@ describe('SessionCostLine', () => {
     stubFetch({ ...RESPONSE, balance: { ok: false, code: 'MISSING_CREDENTIAL', message: 'no key' } })
     const empty = { ...PROJECTION, model: null, steps: [], totals: { uncachedCost: 0, cacheReadCost: 0, outputCost: 0, cost: 0, pricedSteps: 0, unpricedSteps: 0, steps: 0 } }
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
       useProjection={() => empty as never}
       sessionId={"fresh-session" as never}
       t={zhT}
@@ -344,7 +326,6 @@ describe('SessionCostLine', () => {
   it('shows a balance-failed marker when the host route errors', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
     render(<SessionCostLine
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -357,7 +338,6 @@ describe('SessionCostLine', () => {
     vi.useFakeTimers()
     try {
       const { unmount } = render(<SessionCostLine
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
         useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
         t={zhT}
@@ -380,8 +360,7 @@ describe('AssistantCostChip', () => {
   it('renders the anchored per-reply cost', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
-      messageId={'m1' as never}
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+      matched={{ turn: 1 }}
       useProjection={() => PROJECTION as never}
       t={zhT}
     />)
@@ -396,8 +375,7 @@ describe('AssistantCostChip', () => {
       totals: { ...PROJECTION.totals, pricedSteps: 0, unpricedSteps: 1, cost: 0 },
     }
     render(<AssistantCostChip
-      messageId={'m1' as never}
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+      matched={{ turn: 1 }}
       useProjection={() => unpriced as never}
       t={zhT}
     />)
@@ -407,8 +385,7 @@ describe('AssistantCostChip', () => {
   it('renders nothing when the message is out of window', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
-      messageId={'m1' as never}
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([]))) as never}
+      matched={{ turn: 9 }}
       useProjection={() => PROJECTION as never}
       t={zhT}
     />)
@@ -428,8 +405,7 @@ describe('AssistantCostChip', () => {
         steps: [{ ...PROJECTION.steps[0], time: POST_PEAK_MS, band: 'peak' as const }],
       }
       render(<AssistantCostChip
-        messageId={'m1' as never}
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        matched={{ turn: 1 }}
         useProjection={() => peakLedger as never}
         t={zhT}
       />)
@@ -454,8 +430,7 @@ describe('AssistantCostChip', () => {
         steps: [{ ...PROJECTION.steps[0], time: POST_OFFPEAK_MS, band: 'offPeak' as const }],
       }
       render(<AssistantCostChip
-        messageId={'m1' as never}
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        matched={{ turn: 1 }}
         useProjection={() => offPeakLedger as never}
         t={zhT}
       />)
@@ -477,7 +452,7 @@ describe('SessionCostPill', () => {
     try {
       stubFetch(RESPONSE)
       render(<SessionCostPill
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
         useProjection={() => PROJECTION as never}
         sessionId={"s1" as never}
         t={zhT}
@@ -496,8 +471,6 @@ describe('SessionCostPill', () => {
       stubFetch(RESPONSE)
       const running = {
         running: true,
-        partial: { turn: 2, step: 1, blocks: [{ kind: 'text', text: '你好世界 hello' }] },
-        chat: { legacy: { nodes: [assistantNode('m1')] } },
       } as never
       const useProjection = (key: string): unknown => {
         if (key === 'sessionCost') return PROJECTION
@@ -510,8 +483,9 @@ describe('SessionCostPill', () => {
         sessionId={"s1" as never}
         t={zhT}
       />)
-      // 4 CJK ÷ 1.5 = 2.67→3 + 5 ASCII ÷ 4 = 1.25→2 → 5 output tokens.
-      // Input 1.1M at 50% cached ratio: 1.1 × (0.5×1 + 0.5×0.02) = 0.561; output 5 × 2/1M ≈ 0.00001 → ≈ 0.561.
+      // Input 1.1M at 50% cached ratio: 1.1 × (0.5×1 + 0.5×0.02) = 0.561; the
+      // running reply's output is unestimated (DSH 0.1.5 no longer exposes the
+      // streaming partial blocks; the round's settled usage follows).
       // The estimate projects the TOTAL after the reply settles: anchored 3.02 + 0.561 ≈ 3.58.
       const text = await screen.findByText(/预计/)
       expect(text.textContent).toContain('¥3.58')
@@ -528,7 +502,7 @@ describe('SessionCostPill', () => {
     try {
       stubFetch(RESPONSE)
       render(<SessionCostPill
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
         useProjection={() => PROJECTION as never}
         sessionId={"s1" as never}
         t={zhT}
@@ -549,7 +523,7 @@ describe('SessionCostPill', () => {
     try {
       stubFetch(RESPONSE)
       render(<SessionCostPill
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
         useProjection={() => PROJECTION as never}
         sessionId={"s1" as never}
         t={zhT}
@@ -573,7 +547,7 @@ describe('SessionCostPill', () => {
     try {
       stubFetch({ ...RESPONSE, pricebook: { ...RESPONSE.pricebook, schedule: { timezone: 'UTC', ranges: [[0, 1]] as const } } })
       render(<SessionCostPill
-        useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+        useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
         useProjection={() => PROJECTION as never}
         sessionId={"s1" as never}
         t={zhT}
@@ -590,7 +564,7 @@ describe('SessionCostPill', () => {
   it('toggles the detail panel on click', async () => {
     stubFetch(RESPONSE)
     render(<SessionCostPill
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+      useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
@@ -606,7 +580,7 @@ describe('SessionCostPill', () => {
   it('dismisses the detail panel on an outside click', async () => {
     stubFetch(RESPONSE)
     render(<SessionCostPill
-      useSession={((selector: (s: never) => unknown) => selector(snapshotWithNodes([assistantNode('m1')]))) as never}
+      useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}

@@ -1,9 +1,10 @@
 /**
- * sessionCost projection coverage: model capture from request/header, usage
- * chunk → final message replacement, the cost formula (cache writes at the
- * uncached input rate), snapshot-time anchoring with immutable written rows
- * (price changes never recompute old steps), peak/off-peak band selection at
- * the EVENT time, unpriced models, and totals math.
+ * sessionCost projection coverage: model capture from request/context, usage
+ * message finalization (stream usage arrives once, on assistant/message), the
+ * cost formula (cache writes at the uncached input rate), snapshot-time
+ * anchoring with immutable written rows (price changes never recompute old
+ * steps), peak/off-peak band selection at the EVENT time, unpriced models,
+ * and totals math.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -49,7 +50,7 @@ function event(type: string, time: number, data: Record<string, unknown>): Sessi
 }
 
 function headerEvent(time: number, model = 'deepseek-v4-flash', provider = 'deepseek-official'): SessionEvent {
-  return event('request/header', time, { header: { config: { provider, model } }, reason: 'initial' })
+  return event('request/context', time, { provider, model })
 }
 
 function usageEvent(time: number, turn: number, step: number, usage: Record<string, number>): SessionEvent {
@@ -64,7 +65,7 @@ describe('usageBuckets', () => {
 })
 
 describe('foldSessionCost model capture', () => {
-  it('records the session model from request/header', () => {
+  it('records the session model from request/context', () => {
     const handle = handleWith([snapshotFixture(1, 0)])
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000, 'deepseek-v4-pro'), handle)
@@ -114,14 +115,11 @@ describe('foldSessionCost pricing and anchoring', () => {
     expect(viewSessionCost(state).steps[0].band).toBe('single')
   })
 
-  it('replaces the usage-chunk sample with the final assistant/message sample', () => {
+  it('replaces the first usage sample with the final assistant/message sample', () => {
     const handle = handleWith([snapshotFixture(1, 0)])
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000), handle)
-    const chunk = event('assistant/chunk', 5_000, {
-      turn: 1, step: 1, chunk: { type: 'usage', usage: { inputTokens: 10, outputTokens: 20 } },
-    })
-    state = foldSessionCost(state, chunk, handle)
+    state = foldSessionCost(state, usageEvent(5_000, 1, 1, { inputTokens: 10, outputTokens: 20 }), handle)
     expect(state.totals.cost).toBeCloseTo((10 * 1 + 20 * 2) / 1_000_000)
     state = foldSessionCost(state, usageEvent(6_000, 1, 1, { inputTokens: 100, outputTokens: 200 }), handle)
     const view = viewSessionCost(state)
@@ -182,7 +180,7 @@ describe('foldSessionCost pricing and anchoring', () => {
     expect(state.totals.cost).toBe(0)
   })
 
-  it('marks steps unpriced with NO_MODEL when no request/header was seen', () => {
+  it('marks steps unpriced with NO_MODEL when no request/context was seen', () => {
     const handle = handleWith([snapshotFixture(1, 0)])
     const state = foldSessionCost(init(), usageEvent(2_000, 1, 1, { inputTokens: 100, outputTokens: 50 }), handle)
     expect(viewSessionCost(state).steps[0].unpricedReason).toBe('NO_MODEL')

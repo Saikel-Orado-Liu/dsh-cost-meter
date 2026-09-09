@@ -1,20 +1,20 @@
 /**
- * Per-reply cost chip: the anchored cost of ONE finalized reply. Rendered
- * through the assistant-actions slot but visually joined to the reply's
- * timing row (01:51 · 用时 · 首 token · tok/s): a flex `order` places it
- * after the clock text, and the type matches the clock's (label-tertiary,
- * 14px) with a dot separator, so it reads as part of the same metadata run.
- * The `messageId` owner prop maps to the assistant node's (turn, step),
- * which addresses the projection's step ledger — the cost is the anchored
- * snapshot value, never a current-price recompute. Unpriced replies render
+ * Per-reply cost at the end of the completed Turn's timing row. Rendered
+ * through the `conversation.chat.turnTail` chain slot — the selector only
+ * accepts closed Turns, so the extension appears once the reply settled and
+ * sits directly after the timing facts (用时 · 首 token · tok/s), with a dot
+ * separator and the same label-tertiary type as the clock text.
+ *
+ * DSH 0.1.5 removed the per-message assistant-actions slot and replaced the
+ * legacy chat-node window with turn/step locations; the cost is therefore
+ * addressed per Turn: the anchored step ledger (`sessionCost` projection) is
+ * filtered to the Turn's own steps and summed. Every price is the anchored
+ * snapshot value, never a current-price recompute; an unpriced Turn renders
  * `—` (the Cost tab explains why).
  */
 import { memo, useEffect, useState } from 'react'
-import type { UseProjection } from '@deepseek-ai/dsh-client-runtime/client'
-import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ConversationSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
 import { bandForTime, peakOffPeakMultiplier } from './cost-math.ts'
 import { currencySymbol, displayCurrency, formatMoney, formatMultiplier } from './format.ts'
@@ -23,32 +23,10 @@ import css from './AssistantCostChip.module.css'
 export type ChipLocale = PropsLocale<'cost-meter'>['t']
 
 export interface AssistantCostChipProps {
-  /** Stable identity of the finalized assistant message the actions address. */
-  messageId: MessageId
-  useSession: SnapshotSelectorHook<ConversationSnapshot>
+  /** The closed Turn selected by the turnTail chain selector. */
+  matched: { turn: number }
   useProjection: UseProjection
   t: ChipLocale
-}
-
-/**
- * Locate a finalized assistant node by its message id and return its
- * (turn, step) coordinates, or null when the node is out of window.
- * @param snapshot - the conversation snapshot.
- * @param messageId - the addressed message identity.
- * @returns the step coordinates, or null.
- */
-export function stepOfMessage(
-  snapshot: ConversationSnapshot,
-  messageId: MessageId,
-): { turn: number; step: number } | null {
-  const nodes = snapshot.chat.legacy.nodes
-  for (let i = nodes.length - 1; i >= 0; i -= 1) {
-    const node = nodes[i]
-    if (node?.kind === 'assistant' && node.messageId === messageId && node.turn !== undefined) {
-      return { turn: node.turn, step: node.step }
-    }
-  }
-  return null
 }
 
 /** The projection step for one (turn, step) coordinate, if the ledger has it. */
@@ -60,13 +38,19 @@ export function stepOf(
   return steps?.find(entry => entry.turn === turn && entry.step === step)
 }
 
-export const AssistantCostChip = memo(function AssistantCostChip({ messageId, useSession, useProjection, t }: AssistantCostChipProps) {
+/** The Turn's own ledger steps, in fold order. */
+export function stepsOfTurn(
+  steps: readonly SessionCostStep[] | undefined,
+  turn: number,
+): SessionCostStep[] {
+  return steps?.filter(entry => entry.turn === turn) ?? []
+}
+
+export const AssistantCostChip = memo(function AssistantCostChip({ matched, useProjection, t }: AssistantCostChipProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
-  const step = useSession(snapshot => stepOfMessage(snapshot, messageId))
   const costCny = useProjection('sessionCost')
   const costUsd = useProjection('sessionCostUsd')
   const cost = currency === 'USD' ? costUsd : costCny
-  const ledger = step === null ? undefined : stepOf(cost?.steps, step.turn, step.step)
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
 
   useEffect(() => {
@@ -83,21 +67,26 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
     }
   }, [currency])
 
-  if (ledger === undefined || ledger.cost === null) {
-    if (ledger === undefined) return null
-    // Unpriced reply: show the dash; the native title explains why.
-    const reason = ledger.unpricedReason === 'NO_MODEL' ? t('reason.NO_MODEL') : t('reason.NO_PRICE')
+  const steps = stepsOfTurn(cost?.steps, matched.turn)
+  const priced = steps.filter(entry => entry.cost !== null)
+  if (steps.length === 0) return null
+  if (priced.length === 0) {
+    // Unpriced turn: show the dash; the native title explains why.
+    const reason = steps[0]?.unpricedReason === 'NO_MODEL' ? t('reason.NO_MODEL') : t('reason.NO_PRICE')
     return (
       <span className={css.unpriced} data-cost-chip title={reason} data-testid="cost-chip-unpriced">{t('chip.unpriced')}</span>
     )
   }
 
-  const amount = `${currencySymbol(currency)}${formatMoney(ledger.cost)}`
-  // Anchored to the ROUND's own time: the ledger's `band` was fixed at fold
-  // time from the usage event's time, so the badge shows the band that
+  const total = priced.reduce((sum, entry) => sum + (entry.cost ?? 0), 0)
+  const amount = `${currencySymbol(currency)}${formatMoney(total)}`
+  // Anchored to the Turn's own (last) step: the ledger's `band` was fixed at
+  // fold time from the usage event's time, so the badge shows the band that
   // actually priced this reply — not the band of the clock right now.
-  const band = ledger.band ?? bandForTime(ledger.time)
-  const ratio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, ledger.provider, ledger.model)
+  const last = priced[priced.length - 1]
+  if (last === undefined) return null
+  const band = last.band ?? bandForTime(last.time)
+  const ratio = peakOffPeakMultiplier(response?.pricebook?.current ?? null, last.provider, last.model)
   const bandLabel = band === 'peak'
     ? ratio === null ? t('band.peak') : t('price.peakRatio', { multiplier: formatMultiplier(ratio) })
     : band === 'offPeak'

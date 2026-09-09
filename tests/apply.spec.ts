@@ -48,7 +48,7 @@ function makeContext(): Harness {
       return disposer
     },
     inject: () => { /* the settings service is absent in this harness: the
-      installSettingsSection wiring stays dormant, exactly as designed */ },
+      settings registration wiring stays dormant, exactly as designed */ },
     webServer: {
       register: (route: WebRoute) => {
         routes.push(route)
