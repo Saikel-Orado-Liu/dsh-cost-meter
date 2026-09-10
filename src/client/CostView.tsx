@@ -5,9 +5,12 @@
  * per-subagent breakdown, and the per-reply list (turn, time, model, token
  * split, step cost, anchored snapshot version and effective time). Reads the
  * `sessionCost` projection plus the host-aggregated subagent totals; nothing
- * is recomputed at current prices.
+ * is recomputed at current prices. Each row's band rides the shipped `Tag`
+ * capsule (11px/17px, `success` off-peak / `danger` peak), the same tag
+ * geometry every other tag control in the product uses.
  */
 import { memo, useEffect, useState } from 'react'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
@@ -120,7 +123,7 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
                 <span className={css.stepTime}>{formatTime(step.time)}</span>
                 <span className={css.stepCost}>
                   {money(step.cost)}
-                  {stepBandLabel !== null && <span className={css.bandBadge} data-band={stepBand} data-testid="cost-step-band">{stepBandLabel}</span>}
+                  {stepBandLabel !== null && <Tag tone={stepBand === 'peak' ? 'danger' : 'success'}>{stepBandLabel}</Tag>}
                 </span>
               </div>
               <div className={css.stepBody}>

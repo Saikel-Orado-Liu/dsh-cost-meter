@@ -10,9 +10,12 @@
  * addressed per Turn: the anchored step ledger (`sessionCost` projection) is
  * filtered to the Turn's own steps and summed. Every price is the anchored
  * snapshot value, never a current-price recompute; an unpriced Turn renders
- * `—` (the Cost tab explains why).
+ * `—` (the Cost tab explains why). The band rides the shipped `Tag` capsule
+ * (11px/17px, `success` off-peak / `danger` peak), i.e. the same tag geometry
+ * the rest of the product uses.
  */
 import { memo, useEffect, useState } from 'react'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
@@ -96,7 +99,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ matched, useP
   return (
     <span className={css.root} data-cost-chip title={t('chip.title', { amount })} data-testid="cost-chip">
       {amount}
-      {bandLabel !== null && <span className={css.bandBadge} data-band={band} data-testid="cost-chip-band">{bandLabel}</span>}
+      {bandLabel !== null && <Tag tone={band === 'peak' ? 'danger' : 'success'}>{bandLabel}</Tag>}
     </span>
   )
 })

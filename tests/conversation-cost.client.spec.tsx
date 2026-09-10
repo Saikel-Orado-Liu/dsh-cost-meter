@@ -6,7 +6,9 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // The real ui-primitives pulls KaTeX stylesheets Node cannot load; the
-// surfaces only need Tooltip/Button/icons to pass through, so stub the module.
+// surfaces only need Tooltip/Button/Tag/icons to pass through, so stub the
+// module. `Tag` mirrors the shipped contract that matters here: a
+// `span[data-tone]` capsule carrying the render site's children and class.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
   const React = require('react')
   const passthrough = (props: Record<string, unknown>) => React.createElement('span', props)
@@ -15,6 +17,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
       React.createElement('div', { 'data-tooltip': String(props.label ?? '') }, props.children),
     Button: (props: { children?: unknown; onClick?: unknown; disabled?: unknown; variant?: unknown }) =>
       React.createElement('button', { type: 'button', onClick: props.onClick, disabled: props.disabled }, props.children),
+    Tag: (props: { tone?: string; className?: string; children?: unknown }) =>
+      React.createElement('span', { 'data-tone': props.tone ?? 'outline', className: props.className }, props.children),
     IconChevronDownOutline14: passthrough,
   }
 })
@@ -410,10 +414,10 @@ describe('AssistantCostChip', () => {
         t={zhT}
       />)
       await screen.findByText(/2.0×/)
-      const badge = screen.getByTestId('cost-chip-band')
-      expect(badge.getAttribute('data-band')).toBe('peak')
-      expect(badge.textContent).toContain('高峰')
-      expect(badge.textContent).toContain('2.0×')
+      // The band rides the shipped Tag capsule: peak ⇒ `danger` tone.
+      const badge = screen.getByTestId('cost-chip').querySelector('[data-tone="danger"]')
+      expect(badge?.textContent).toContain('高峰')
+      expect(badge?.textContent).toContain('2.0×')
     } finally {
       vi.useRealTimers()
     }
@@ -435,10 +439,9 @@ describe('AssistantCostChip', () => {
         t={zhT}
       />)
       await screen.findByText(/0.5×/)
-      const badge = screen.getByTestId('cost-chip-band')
-      expect(badge.getAttribute('data-band')).toBe('offPeak')
-      expect(badge.textContent).toContain('闲时')
-      expect(badge.textContent).toContain('0.5×')
+      const badge = screen.getByTestId('cost-chip').querySelector('[data-tone="success"]')
+      expect(badge?.textContent).toContain('闲时')
+      expect(badge?.textContent).toContain('0.5×')
     } finally {
       vi.useRealTimers()
     }
@@ -510,8 +513,9 @@ describe('SessionCostPill', () => {
       await screen.findByText(/0.5×/)
       const pill = screen.getByTestId('cost-pill')
       expect(pill.getAttribute('data-band')).toBe('offPeak')
-      expect(screen.getByTestId('cost-pill-band').textContent).toContain('闲时')
-      expect(screen.getByTestId('cost-pill-band').textContent).toContain('0.5×')
+      const badge = pill.querySelector('[data-tone="success"]')
+      expect(badge?.textContent).toContain('闲时')
+      expect(badge?.textContent).toContain('0.5×')
     } finally {
       vi.useRealTimers()
     }
@@ -531,8 +535,9 @@ describe('SessionCostPill', () => {
       await screen.findByText(/2.0×/)
       const pill = screen.getByTestId('cost-pill')
       expect(pill.getAttribute('data-band')).toBe('peak')
-      expect(screen.getByTestId('cost-pill-band').textContent).toContain('高峰')
-      expect(screen.getByTestId('cost-pill-band').textContent).toContain('2.0×')
+      const badge = pill.querySelector('[data-tone="danger"]')
+      expect(badge?.textContent).toContain('高峰')
+      expect(badge?.textContent).toContain('2.0×')
     } finally {
       vi.useRealTimers()
     }
@@ -555,7 +560,7 @@ describe('SessionCostPill', () => {
       await screen.findByText(/2.0×/)
       const pill = screen.getByTestId('cost-pill')
       expect(pill.getAttribute('data-band')).toBe('peak')
-      expect(screen.getByTestId('cost-pill-band').textContent).toContain('高峰')
+      expect(pill.querySelector('[data-tone="danger"]')?.textContent).toContain('高峰')
     } finally {
       vi.useRealTimers()
     }
@@ -617,11 +622,10 @@ describe('CostView', () => {
       />)
       await vi.advanceTimersByTimeAsync(0)
       const card = screen.getByTestId('cost-step')
-      const badge = screen.getByTestId('cost-step-band')
+      const badge = card.querySelector('[data-tone="danger"]')
       expect(card.getAttribute('data-band')).toBe('peak')
-      expect(badge.getAttribute('data-band')).toBe('peak')
-      expect(badge.textContent).toContain('高峰')
-      expect(badge.textContent).toContain('2.0×')
+      expect(badge?.textContent).toContain('高峰')
+      expect(badge?.textContent).toContain('2.0×')
     } finally {
       vi.useRealTimers()
     }
@@ -645,11 +649,10 @@ describe('CostView', () => {
       />)
       await vi.advanceTimersByTimeAsync(0)
       const card = screen.getByTestId('cost-step')
-      const badge = screen.getByTestId('cost-step-band')
+      const badge = card.querySelector('[data-tone="success"]')
       expect(card.getAttribute('data-band')).toBe('offPeak')
-      expect(badge.getAttribute('data-band')).toBe('offPeak')
-      expect(badge.textContent).toContain('闲时')
-      expect(badge.textContent).toContain('0.5×')
+      expect(badge?.textContent).toContain('闲时')
+      expect(badge?.textContent).toContain('0.5×')
     } finally {
       vi.useRealTimers()
     }

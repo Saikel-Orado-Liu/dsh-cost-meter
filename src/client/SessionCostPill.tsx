@@ -11,8 +11,13 @@
  * projected context size weighted by the newest completed step's cache
  * ratio (conservative all-uncached without history), output at the
  * character heuristic — both at CURRENT snapshot prices.
+ *
+ * The band rides the shipped `Tag` capsule (11px/17px, `success` off-peak /
+ * `danger` peak) so the header reads the same tag geometry as every other tag
+ * control in the product.
  */
 import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionSnapshot } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
@@ -161,7 +166,7 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
         aria-expanded={open}
       >
         {label}
-        {bandLabel !== null && <span className={css.bandBadge} data-testid="cost-pill-band">{bandLabel}</span>}
+        {bandLabel !== null && <Tag tone={band === 'peak' ? 'danger' : 'success'}>{bandLabel}</Tag>}
         {estimate !== null && <span className={css.estimateNote}>· {t('pill.estimateNote')}</span>}
       </button>
       {open && (

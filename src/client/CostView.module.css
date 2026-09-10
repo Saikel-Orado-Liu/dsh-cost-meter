@@ -38,28 +38,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.bandBadge {
-  font-size: 11px;
-  font-weight: 500;
-  opacity: 0.85;
-  white-space: nowrap;
-}
-
-.bandBadge[data-band='peak'] {
-  color: var(--dsw-alias-state-error-primary);
-}
-
-.bandBadge[data-band='offPeak'] {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.bandBadge::before {
-  content: '·';
-  margin: 0 4px;
-  color: currentColor;
-  opacity: 0.6;
-}
-
 .categories {
   display: flex;
   flex-wrap: wrap;
@@ -148,7 +126,7 @@
   margin-left: auto;
   display: inline-flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 6px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

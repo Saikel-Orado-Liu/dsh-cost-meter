@@ -13,7 +13,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
   height: 32px;
   padding: 6px 12px;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -55,20 +55,6 @@
 .pill[data-band='offPeak'] {
   color: var(--dsw-alias-state-success-primary);
   border-color: var(--dsw-alias-state-success-secondary);
-}
-
-.bandBadge {
-  font-size: 11px;
-  line-height: 16px;
-  opacity: 0.85;
-  white-space: nowrap;
-}
-
-.bandBadge::before {
-  content: '·';
-  margin: 0 4px;
-  color: currentColor;
-  opacity: 0.6;
 }
 
 .estimateNote {
