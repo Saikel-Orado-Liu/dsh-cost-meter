@@ -110,10 +110,14 @@ afterEach(() => {
 })
 
 describe('apply integration', () => {
-  it('registers the projection and the trust-fenced route', async () => {
+  it('registers the projections and the trust-fenced route', async () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })
-    expect(harness.projections.map(definition => definition.key)).toEqual(['sessionCost', 'sessionCostUsd'])
+    expect(harness.projections.map(definition => definition.key)).toEqual([
+      'sessionCost',
+      'sessionCostUsd',
+      'sessionCostIndex',
+    ])
     const route = harness.routes.find(candidate => candidate.path === '/cost-meter')
     expect(route).toBeDefined()
     expect(harness.disposers.length).toBeGreaterThan(0)

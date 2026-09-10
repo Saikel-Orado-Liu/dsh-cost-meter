@@ -1,18 +1,17 @@
 /**
- * Per-reply cost at the end of the completed Turn's timing row. Rendered
- * through the `conversation.chat.turnTail` chain slot — the selector only
- * accepts closed Turns, so the extension appears once the reply settled and
- * sits directly after the timing facts (用时 · 首 token · tok/s), with a dot
- * separator and the same label-tertiary type as the clock text.
+ * Per-reply cost, appended to the completed Turn's action row. Rendered
+ * through the `conversation.chat.assistant-actions` list slot: DSH 0.1.5
+ * renders those entries inside the action row itself (copy · branch · usage ·
+ * 用时 3分12秒 · 9月4日 19:47), and the chip's `order` places it after the
+ * timing text, so the price closes the same row the timing facts end.
  *
- * DSH 0.1.5 removed the per-message assistant-actions slot and replaced the
- * legacy chat-node window with turn/step locations; the cost is therefore
- * addressed per Turn: the anchored step ledger (`sessionCost` projection) is
- * filtered to the Turn's own steps and summed. Every price is the anchored
- * snapshot value, never a current-price recompute; an unpriced Turn renders
- * `—` (the Cost tab explains why). The band rides the shipped `Tag` capsule
- * (11px/17px, `success` off-peak / `danger` peak), i.e. the same tag geometry
- * the rest of the product uses.
+ * The slot hands over only the finalized message id, so the `sessionCostIndex`
+ * projection resolves it to the (turn, step) coordinates the anchored ledger
+ * is keyed by; the Turn's own steps are then summed. Every price is the
+ * anchored snapshot value, never a current-price recompute; an unpriced Turn
+ * renders `—` (the Cost tab explains why). The band rides the shipped `Tag`
+ * capsule (11px/17px, `success` off-peak / `danger` peak), i.e. the same tag
+ * geometry the rest of the product uses.
  */
 import { memo, useEffect, useState } from 'react'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -26,8 +25,8 @@ import css from './AssistantCostChip.module.css'
 export type ChipLocale = PropsLocale<'cost-meter'>['t']
 
 export interface AssistantCostChipProps {
-  /** The closed Turn selected by the turnTail chain selector. */
-  matched: { turn: number }
+  /** Durable id of the finalized assistant message owning this action row. */
+  messageId: string
   useProjection: UseProjection
   t: ChipLocale
 }
@@ -49,11 +48,12 @@ export function stepsOfTurn(
   return steps?.filter(entry => entry.turn === turn) ?? []
 }
 
-export const AssistantCostChip = memo(function AssistantCostChip({ matched, useProjection, t }: AssistantCostChipProps) {
+export const AssistantCostChip = memo(function AssistantCostChip({ messageId, useProjection, t }: AssistantCostChipProps) {
   const currency = displayCurrency(t as (key: string, params?: Record<string, string>) => string)
   const costCny = useProjection('sessionCost')
   const costUsd = useProjection('sessionCostUsd')
   const cost = currency === 'USD' ? costUsd : costCny
+  const index = useProjection('sessionCostIndex')
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
 
   useEffect(() => {
@@ -70,7 +70,9 @@ export const AssistantCostChip = memo(function AssistantCostChip({ matched, useP
     }
   }, [currency])
 
-  const steps = stepsOfTurn(cost?.steps, matched.turn)
+  // The action row carries the message id; the index carries its coordinates.
+  const coordinates = index?.steps[messageId]
+  const steps = coordinates === undefined ? [] : stepsOfTurn(cost?.steps, coordinates.turn)
   const priced = steps.filter(entry => entry.cost !== null)
   if (steps.length === 0) return null
   if (priced.length === 0) {

@@ -3,7 +3,9 @@
  * (official `GET /user/balance`), the pricebook (persisted, snapshot-anchored
  * per-model pricing over the official page / built-in fallback / OpenRouter
  * chain), and drives the `sessionCost` projection that folds every usage
- * event into an immutable per-step cost ledger.
+ * event into an immutable per-step cost ledger plus the pricebook-free
+ * `sessionCostIndex` projection that maps a finalized assistant message to the
+ * ledger coordinates it was priced under.
  *
  * The API key resolves per refresh through the credential seam; the balance
  * is cached for `refreshMs` to stay polite to the provider's rate limits;
@@ -34,6 +36,7 @@ import {
   type PricebookResolvedConfig,
 } from './pricebook.ts'
 import { sessionCostProjection } from './session-cost-projection.ts'
+import { sessionCostIndexProjection } from './session-cost-index.ts'
 import { collectSubagentCosts, type SubagentAgentsService, type SubagentSessionsService } from './subagent-cost.ts'
 import type { BalanceInfo, BalanceSnapshot, ConversationCostResponse, ModelPrice, PricebookView, WireBalanceResponse } from './types.ts'
 
@@ -41,6 +44,7 @@ export type * from './types.ts'
 export * from './pricing.ts'
 export * from './pricebook.ts'
 export * from './session-cost-projection.ts'
+export * from './session-cost-index.ts'
 export * from './subagent-cost.ts'
 
 /** Stable Cordis plugin name. */
@@ -308,7 +312,8 @@ export const SETTINGS_NAMESPACE = 'cost-meter' as SettingsNamespace
 
 /**
  * Mount the plugin: open the pricebook domain, refresh every remote source,
- * register the `sessionCost` projection, register the /cost-meter
+ * register the `sessionCost` / `sessionCostUsd` ledgers and the
+ * `sessionCostIndex` message index, register the /cost-meter
  * route (GET view + POST settings/refresh), and keep the balance and the
  * official pricing fresh.
  * @param ctx - host context.
@@ -362,7 +367,9 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     scope.watch((next) => applySettings(next))
   })
 
-  // ── sessionCost projections: anchored per-step ledgers for CNY and USD. ──
+  // ── sessionCost projections: anchored per-step ledgers for CNY and USD,
+  //  plus the pricebook-free message index the per-reply chip resolves
+  //  through (the action row hands over a message id, not a Turn). ──
   ctx.effect(
     () => ctx.sessionProjections.register(sessionCostProjection(pricebookCny, 'sessionCost')),
     'cost-meter: sessionCost projection',
@@ -370,6 +377,10 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
   ctx.effect(
     () => ctx.sessionProjections.register(sessionCostProjection(pricebookUsd, 'sessionCostUsd')),
     'cost-meter: sessionCostUsd projection',
+  )
+  ctx.effect(
+    () => ctx.sessionProjections.register(sessionCostIndexProjection()),
+    'cost-meter: sessionCostIndex projection',
   )
 
   // ── Balance: cached refresh, one in-flight at a time. ──

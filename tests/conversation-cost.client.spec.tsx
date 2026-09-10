@@ -361,11 +361,17 @@ describe('SessionCostLine', () => {
 })
 
 describe('AssistantCostChip', () => {
-  it('renders the anchored per-reply cost', () => {
+  /** The `sessionCostIndex` value the chip resolves its Turn through. */
+  const INDEX = { steps: { 'msg-1': { turn: 1, step: 1 } } }
+  /** The chip reads the anchored ledger plus the message index; key picks one. */
+  const projections = (ledger: unknown, index: unknown = INDEX): never =>
+    ((key: string) => (key === 'sessionCostIndex' ? index : ledger)) as never
+
+  it('renders the anchored per-reply cost of the message own Turn', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
-      matched={{ turn: 1 }}
-      useProjection={() => PROJECTION as never}
+      messageId="msg-1"
+      useProjection={projections(PROJECTION)}
       t={zhT}
     />)
     expect(screen.getByTestId('cost-chip').textContent).toContain('¥3.02')
@@ -379,22 +385,32 @@ describe('AssistantCostChip', () => {
       totals: { ...PROJECTION.totals, pricedSteps: 0, unpricedSteps: 1, cost: 0 },
     }
     render(<AssistantCostChip
-      matched={{ turn: 1 }}
-      useProjection={() => unpriced as never}
+      messageId="msg-1"
+      useProjection={projections(unpriced)}
       t={zhT}
     />)
     expect(screen.getByTestId('cost-chip-unpriced').textContent).toBe('—')
   })
 
-  it('renders nothing when the message is out of window', () => {
+  it('renders nothing for a message the index does not carry', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
-      matched={{ turn: 9 }}
-      useProjection={() => PROJECTION as never}
+      messageId="msg-unknown"
+      useProjection={projections(PROJECTION)}
       t={zhT}
     />)
     expect(screen.queryByTestId('cost-chip')).toBeNull()
     expect(screen.queryByTestId('cost-chip-unpriced')).toBeNull()
+  })
+
+  it('renders nothing when the indexed Turn has no ledger step', () => {
+    stubFetch(RESPONSE)
+    render(<AssistantCostChip
+      messageId="msg-1"
+      useProjection={projections(PROJECTION, { steps: { 'msg-1': { turn: 9, step: 1 } } })}
+      t={zhT}
+    />)
+    expect(screen.queryByTestId('cost-chip')).toBeNull()
   })
 
   it('marks the per-reply cost chip red with the peak extra multiplier of the ROUND', async () => {
@@ -409,8 +425,8 @@ describe('AssistantCostChip', () => {
         steps: [{ ...PROJECTION.steps[0], time: POST_PEAK_MS, band: 'peak' as const }],
       }
       render(<AssistantCostChip
-        matched={{ turn: 1 }}
-        useProjection={() => peakLedger as never}
+        messageId="msg-1"
+        useProjection={projections(peakLedger)}
         t={zhT}
       />)
       await screen.findByText(/2.0×/)
@@ -434,8 +450,8 @@ describe('AssistantCostChip', () => {
         steps: [{ ...PROJECTION.steps[0], time: POST_OFFPEAK_MS, band: 'offPeak' as const }],
       }
       render(<AssistantCostChip
-        matched={{ turn: 1 }}
-        useProjection={() => offPeakLedger as never}
+        messageId="msg-1"
+        useProjection={projections(offPeakLedger)}
         t={zhT}
       />)
       await screen.findByText(/0.5×/)

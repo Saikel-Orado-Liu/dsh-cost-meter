@@ -8,7 +8,7 @@
 
 **DSH Cost Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。
 
-- Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影、子代理成本聚合，以及带信任围栏的 `/cost-meter` 路由。
+- Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影与不读价格簿的 `sessionCostIndex` 消息索引、子代理成本聚合，以及带信任围栏的 `/cost-meter` 路由。
 - Client 半区（`src/client/`）：输入框下方读数、花费标签页、每条回复成本小标签、头部胶囊，以及插件配置卡——内置简体中文与英文。
 
 ---
@@ -60,7 +60,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 |---|---|---|
 | 输入框下方读数 | `conversation.composer.dock` | 锚定的本会话花费 + 账户余额，每分钟刷新；悬停查看分类明细与快照信息 |
 | 花费标签页 | `conversation.view` | 全对话总花费（主会话 + 子代理）、分类小计、子代理列表与逐回复锚定账本 |
-| 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本（无价格时显示 `—`） |
+| 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，紧跟该轮动作行末尾的用时文本；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标（无价格时显示 `—`） |
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
 | 插件配置卡 | `settings.plugin.item` | 按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新 |
 
@@ -73,7 +73,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 - **优先级链**——按规范模型键（`provider/model`、裸模型名，或 DeepSeek 系模型的 `flash`/`pro` 定价键）：手动覆盖 > 官方页面 > 内置回退 > OpenRouter（仅回退，USD→CNY，缓存读按配置折扣）> 无。
 - **快照选取**——`snapshotForTime` 取 `effectiveAt <= 事件时间` 的最新快照（安装前的会话一次性锚到首个快照）。
 - **峰值/闲时**——2026-08-17 上线前所有步按单一价目计费；上线后按事件自身时刻与该价格簿页面的时段表选档（中英文页面各自解析自己的高峰窗口，英文新版为 UTC，抓取失败时回退到北京 09:00–12:00 / 14:00–18:00，其余闲时）。官方页面限定高峰仅周一至周五，因此北京时间周六、周日全天为闲时。新版合并表没有旧单价列时，`single` 继续锚定内置历史单价；页面若有独立旧表，则优先用它。每步的档位在折叠时锚定一次，逐回复卡片与回复小标签永远显示该轮对话当时被计价的档位，而不是查看时刻的档位。
-- **不可变账本**——`sessionCost` 投影（`src/session-cost-projection.ts`）把 `request/header`（模型）与携带用量的事件折叠为逐步记录；同一 (turn, step) 的第二次用量样本**替换**第一条（同一步终结，而非重新计价），总计以 O(1) 增量维护。
+- **不可变账本**——`sessionCost` 投影（`src/session-cost-projection.ts`）把 `request/header`（模型）与携带用量的事件折叠为逐步记录；同一 (turn, step) 的第二次用量样本**替换**第一条（同一步终结，而非重新计价），总计以 O(1) 增量维护。配套的 `sessionCostIndex` 投影（`src/session-cost-index.ts`）把每条已定稿助手消息 id 映射到其账本坐标；它不读价格簿、不算成本，因此折叠它绝不会重新计价任何会话。
 
 ## 项目结构
 
@@ -84,6 +84,7 @@ src/
   pricing.ts                    # 官方价格页解析、峰值定价、北京时段
   pricebook.ts                  # 只追加快照、优先级链、存储域
   session-cost-projection.ts    # sessionCost 投影（不可变逐步账本）
+  session-cost-index.ts         # sessionCostIndex：消息 id → 账本坐标
   subagent-cost.ts              # BFS 子代理成本聚合
   invariant.ts                  # 路由释放对称性 invariant 伴生插件
   client/                       # 浏览器半区：5 个插槽组件 + 数学/格式化/本地化
@@ -107,7 +108,7 @@ pnpm build       # tsc -b && tsdown（lib/ + lib/client.js）
 
 ## 文档
 
-- [`src/pricing.ts`](src/pricing.ts)、[`src/pricebook.ts`](src/pricebook.ts)、[`src/session-cost-projection.ts`](src/session-cost-projection.ts)——解析、锚定与账本契约的详细模块注释
+- [`src/pricing.ts`](src/pricing.ts)、[`src/pricebook.ts`](src/pricebook.ts)、[`src/session-cost-projection.ts`](src/session-cost-projection.ts)、[`src/session-cost-index.ts`](src/session-cost-index.ts)——解析、锚定与账本契约的详细模块注释
 - [`README.md`](README.md) — English version
 
 ## 许可证

@@ -1,59 +1,34 @@
-/* Per-reply cost chip inside the assistant action row.
-   `order` pushes it past the clock text (01:51 · 用时 · 首 token · tok/s),
-   and the type matches the clock's (timeEnd: label-tertiary, 14px), so it
-   reads as part of the same metadata run instead of sitting beside the
-   branch button. Like the clock text itself, the chip is hidden until the
-   message row is hovered (or focused): the same `data-time-hover-root`
-   contract the product's own time stamps use. */
+/* Per-reply cost chip inside the completed Turn's action row.
+   The row is the product's own flex strip (copy · branch · usage · timing
+   text, `align-items: center`, `gap: 8px`, 28px tall) and draws the timing
+   text last; `order` therefore parks the chip after that text, closing the
+   row with the price. No separator dot: the row's own 8px gap and the Tag
+   capsule already set it apart. The type mirrors the row's timing text
+   (timeEnd: label-tertiary, `--dsh-content-font-size-secondary`, 24px line
+   box), so the price reads as one more fact of the same metadata run. The
+   row's own `data-actions-reveal` contract still hides it until the turn is
+   hovered; nothing here needs its own reveal rule. */
 
 .root {
-  order: 10;
-  margin-left: 10px;
+  order: 99;
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   font-variant-numeric: tabular-nums;
 }
 
-.root::before {
-  content: '·';
-  margin-right: 10px;
-  color: var(--dsw-alias-separator-primary);
-}
-
 .unpriced {
-  order: 10;
-  margin-left: 10px;
+  order: 99;
+  display: inline-flex;
+  align-items: center;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 24px;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   opacity: 0.6;
   cursor: help;
-}
-
-.unpriced::before {
-  content: '·';
-  margin-right: 10px;
-  color: var(--dsw-alias-separator-primary);
-}
-
-@media (hover: hover) {
-  [data-time-hover-root] [data-cost-chip] {
-    opacity: 0;
-    transition: opacity 80ms;
-  }
-
-  [data-time-hover-root]:hover [data-cost-chip],
-  [data-time-hover-root]:focus-within [data-cost-chip] {
-    opacity: 1;
-  }
-
-  [data-time-hover-root] [data-cost-chip].unpriced {
-    opacity: 0;
-  }
 }

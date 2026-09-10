@@ -78,16 +78,18 @@ export function apply(ctx: ClientContext): void {
     }, CostView),
   )
 
-  // Per-reply cost at the END of a completed Turn's timing row
-  // (用时 · 日期): the turnTail chain renders after the timing facts and
-  // before the action row. DSH 0.1.5 closed the per-message assistant-actions
-  // slot, so the cost is addressed per Turn; the selector declines open turns
-  // and the tail stays empty while the reply is in flight.
+  // Per-reply cost at the END of a completed Turn's action row
+  // (copy · branch · usage · 用时 3分12秒 · 9月4日 19:47): DSH 0.1.5 renders the
+  // assistant-actions entries INSIDE that row and hands each one the finalized
+  // message id, so the chip resolves its Turn through the `sessionCostIndex`
+  // projection and its own `order` parks it after the timing text. The
+  // `turnTail` chain would instead render on its own line above the row.
   ctx.slots.inject(
-    'conversation.chat.turnTail',
+    'conversation.chat.assistant-actions',
     () => ctx.slots.register({
-      name: 'conversation.chat.turnTail',
-      select: (owner) => owner.turn.status === 'closed' ? { turn: owner.turn.turn } : null,
+      name: 'conversation.chat.assistant-actions',
+      id: 'cost-meter',
+      order: 20,
       locale: NS,
     }, AssistantCostChip),
   )

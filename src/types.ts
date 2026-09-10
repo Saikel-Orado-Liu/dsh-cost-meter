@@ -386,6 +386,25 @@ export interface SubagentCost {
   totals: SessionCostTotals
 }
 
+/** One ledger coordinate: the turn and step that priced a finalized message. */
+export interface SessionCostCoordinates {
+  /** Turn number of the reply. */
+  turn: number
+  /** Final step number of the reply within the turn. */
+  step: number
+}
+
+/**
+ * The `sessionCostIndex` projection value: durable assistant-message id →
+ * ledger coordinates. DSH 0.1.5 hands the per-reply action slot only the
+ * finalized message id while the anchored ledgers are keyed by (turn, step);
+ * this index bridges the two without recomputing any price.
+ */
+export interface SessionCostIndex {
+  /** Durable message id → the coordinates its reply was priced under. */
+  steps: Record<string, SessionCostCoordinates>
+}
+
 /** The complete payload the `/cost-meter` route serves. */
 export interface ConversationCostResponse {
   /** Latest balance snapshot; null before the first successful fetch. */
@@ -402,5 +421,7 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
     sessionCost: SessionCostProjection
     /** Anchored per-step cost ledger of one session (USD pricebook). */
     sessionCostUsd: SessionCostProjection
+    /** Finalized assistant-message id → its ledger coordinates. */
+    sessionCostIndex: SessionCostIndex
   }
 }

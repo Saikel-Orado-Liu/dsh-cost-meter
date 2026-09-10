@@ -8,7 +8,7 @@
 
 **DSH Cost Meter** is a DeepSeek conversation cost-tracking plugin for the DeepSeek Harness (DSH) Web GUI — **price-snapshot-anchored per-turn cost** (peak/off-peak aware), **account balance**, a **cost view tab**, **per-message cost chips**, and a **header pill with live streaming estimates**. Every step's cost, price band, and snapshot version are computed *once* from the pricebook snapshot effective at the usage event's own time and then never recomputed — a later price change never rewrites an already-written conversation row.
 
-- Host half (`src/`): DeepSeek `GET /user/balance` query, the persisted snapshot-anchored pricebook, the `sessionCost` projection, subagent cost aggregation, and the trust-fenced `/cost-meter` route.
+- Host half (`src/`): DeepSeek `GET /user/balance` query, the persisted snapshot-anchored pricebook, the `sessionCost` projection plus the pricebook-free `sessionCostIndex` message index, subagent cost aggregation, and the trust-fenced `/cost-meter` route.
 - Client half (`src/client/`): composer-dock readout, Cost tab, per-reply chip, header pill, and the plugin configuration card — in Simplified Chinese and English.
 
 ---
@@ -60,7 +60,7 @@ Once installed, the plugin contributes five browser surfaces (all text shown in 
 |---|---|---|
 | Composer dock readout | `conversation.composer.dock` | Anchored session spend + account balance, refreshed every minute; hover for the category breakdown and snapshot info |
 | Cost view tab | `conversation.view` | Whole-conversation totals (main + subagents), category totals, per-subagent list, and the per-reply anchored ledger |
-| Per-reply cost chip | `conversation.chat.assistant-actions` | The anchored cost of one finalized reply (dash `—` when unpriced) |
+| Per-reply cost chip | `conversation.chat.assistant-actions` | The anchored cost of one finalized reply, closing the Turn's action row after its timing text; the slot hands over the message id, which the `sessionCostIndex` projection resolves to ledger coordinates (dash `—` when unpriced) |
 | Header pill | `conversation.session.header.utilities` | Anchored total, or a live `≈ ¥x.xx (estimate)` while streaming; click for the detail panel |
 | Plugin card | `settings.plugin.item` | Per-model overrides, OpenRouter aliases, cache-read discount, FX mode, toggles, and manual refresh |
 
@@ -73,7 +73,7 @@ The pricebook (`src/pricebook.ts`) is the durable price source, persisted on the
 - **Priority chain** — per canonical model key (`provider/model`, bare model, or the `flash`/`pro` pricing key for DeepSeek-family models): manual override > official page > built-in fallback > OpenRouter (fallback only, USD→CNY, cache reads at the configured discount) > none.
 - **Snapshot selection** — `snapshotForTime` picks the newest snapshot with `effectiveAt <= event time` (pre-install sessions anchor to the first snapshot once).
 - **Peak/off-peak** — before the 2026-08-17 rollout all steps price at the single list price; after it, the band is chosen by the EVENT's own time against the schedule of the pricebook's own page (the zh and en pages each parse their own peak windows — the redesigned English page states UTC — falling back to Beijing 09:00–12:00 / 14:00–18:00, everything else off-peak). The official pages restrict peak windows to Monday–Friday, so Saturdays and Sundays are off-peak all day in the schedule's own timezone. When the combined page has no legacy single-price column, `single` keeps anchoring to the built-in historical list; a page that still carries a separate legacy table wins. Each step's band is anchored once at fold time, so the per-reply cards and chips always show the band that round was billed at — never the band of the moment you are looking.
-- **Immutable ledger** — the `sessionCost` projection (`src/session-cost-projection.ts`) folds `request/header` (model) and usage-carrying events into per-step rows; a second usage sample for the same (turn, step) replaces the first (same-step finalization, not a re-price), with O(1) incremental totals.
+- **Immutable ledger** — the `sessionCost` projection (`src/session-cost-projection.ts`) folds `request/header` (model) and usage-carrying events into per-step rows; a second usage sample for the same (turn, step) replaces the first (same-step finalization, not a re-price), with O(1) incremental totals. The companion `sessionCostIndex` projection (`src/session-cost-index.ts`) maps each finalized assistant-message id to its ledger coordinates; it reads no pricebook and computes no cost, so folding it can never re-price a session.
 
 ## Project Structure
 
@@ -84,6 +84,7 @@ src/
   pricing.ts                    # Official pricing-page parser, peak pricing, Beijing bands
   pricebook.ts                  # Append-only snapshots, priority chain, storage domain
   session-cost-projection.ts    # sessionCost projection (immutable per-step ledger)
+  session-cost-index.ts         # sessionCostIndex: message id → ledger coordinates
   subagent-cost.ts              # BFS subagent cost aggregation
   invariant.ts                  # Route-disposer symmetry invariant companion
   client/                       # Browser half: 5 slot components + math/format/locales
@@ -107,7 +108,7 @@ The test suites are fully offline: pricing-page HTML, OpenRouter models, and the
 
 ## Documentation
 
-- [`src/pricing.ts`](src/pricing.ts), [`src/pricebook.ts`](src/pricebook.ts), [`src/session-cost-projection.ts`](src/session-cost-projection.ts) — detailed module docs on parsing, anchoring, and the ledger contract
+- [`src/pricing.ts`](src/pricing.ts), [`src/pricebook.ts`](src/pricebook.ts), [`src/session-cost-projection.ts`](src/session-cost-projection.ts), [`src/session-cost-index.ts`](src/session-cost-index.ts) — detailed module docs on parsing, anchoring, and the ledger contract
 - [`README.zh-CN.md`](README.zh-CN.md) — 简体中文版本
 
 ## License
