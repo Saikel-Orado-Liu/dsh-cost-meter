@@ -79,12 +79,12 @@ export function apply(ctx: ClientContext): void {
   )
 
   // Per-reply cost in the completed Turn's action row
-  // (copy · ¥3.02 · branch · usage · 用时 3分12秒 · 9月4日 19:47): DSH 0.1.5
-  // renders the assistant-actions entries in that row's action area — ahead of
-  // the branch button and the usage/timing readouts — and hands each one the
+  // (copy · branch · 用量 · 用时 · ¥3.02 · 9月4日 19:47): DSH 0.1.5 renders the
+  // assistant-actions entries in that row's action area and hands each one the
   // finalized message id, so the chip resolves its Turn through the
-  // `sessionCostIndex` projection. The `turnTail` chain would instead render on
-  // its own line above the row.
+  // `sessionCostIndex` projection; the capsule's own `order` then closes the
+  // stat run after 用量 / 用时 and before the row's timestamp. The `turnTail`
+  // chain would instead render on its own line above the row.
   ctx.slots.inject(
     'conversation.chat.assistant-actions',
     () => ctx.slots.register({

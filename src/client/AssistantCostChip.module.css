@@ -1,10 +1,11 @@
 /* Per-reply cost capsule inside the completed Turn's action row.
-   The row is the product's own flex strip (copy · branch · usage · timing
-   text, `align-items: center`, `gap: 8px`, 28px tall). The capsule keeps the
-   position the `assistant-actions` slot hands it — the action area right after
-   the copy action, ahead of the branch button and of the 用量 / 用时 / timing
-   readouts that close the row — so no `order` is set and the row's own 8px gap
-   spaces it from its neighbours.
+   The row is the product's own flex strip (copy · branch · 用量 · 用时 ·
+   timestamp, `align-items: center`, `gap: 8px`, 28px tall). The price closes
+   the row's stat run — after 用量 and 用时, before the timestamp — which the
+   flex `order` properties below express: the slot hands the capsule a DOM seat
+   in the action area (after copy, before the branch button), and it is ordered
+   past the row's default-ordered children while the product's own timestamp
+   keeps the last seat it already occupied.
 
    The trigger and the dialog copy the shipped stat-capsule control
    (TurnUsagePanel / TurnTimePanel) token for token, so the price reads as one
@@ -16,8 +17,18 @@
    turn is hovered; nothing here needs a reveal rule of its own. */
 
 .root {
+  order: 1;
   min-width: 0;
   display: inline-flex;
+}
+
+/* The row's timestamp belongs to the product's MessageIconActions module, so it
+   is addressed through the CSS-module naming convention (`<hash>_<localName>`)
+   rather than a class of ours; the rule only pins the seat it already holds.
+   Should that convention ever change, the selector stops matching and the price
+   simply drops back to the row's end — a layout difference, never a break. */
+[class*='_actions'] > [class*='_timeEnd'] {
+  order: 2;
 }
 
 .trigger {
@@ -135,6 +146,7 @@
 }
 
 .unpriced {
+  order: 1;
   display: inline-flex;
   align-items: center;
   color: var(--dsw-alias-label-tertiary);
