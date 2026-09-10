@@ -55,7 +55,10 @@ export const zh = {
 
   // Chip
   'chip.title': '本回复花费 {amount}',
-  'chip.titleWithBand': '本回复花费 {amount}（{band}）',
+  'chip.detail.title': '本回复花费',
+  'chip.detail.band': '计价档位',
+  'chip.detail.model': '模型',
+  'chip.detail.snapshot': '价格快照',
   'chip.unpriced': '—',
 
   // Balance (inherited posture)
@@ -134,7 +137,10 @@ export const en: Record<ConversationCostKey, string> = {
   'price.offPeakRatio': 'off-peak {multiplier}',
 
   'chip.title': 'This reply cost {amount}',
-  'chip.titleWithBand': 'This reply cost {amount} ({band})',
+  'chip.detail.title': 'Cost of this reply',
+  'chip.detail.band': 'Price band',
+  'chip.detail.model': 'Model',
+  'chip.detail.snapshot': 'Price snapshot',
   'chip.unpriced': '—',
 
   'balance.label': 'Balance {amount}',

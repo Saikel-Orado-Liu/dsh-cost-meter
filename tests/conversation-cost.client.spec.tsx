@@ -6,10 +6,9 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // The real ui-primitives pulls KaTeX stylesheets Node cannot load; the
-// surfaces only need Tooltip/Button/Tag/Pill/icons to pass through, so stub
-// the module. `Tag` and `Pill` mirror the shipped contracts that matter here:
-// a `span[data-tone]` capsule, and a plain capsule span carrying the render
-// site's children and class.
+// surfaces only need Tooltip/Button/Tag/Pill/icons and the two anchor hooks to
+// pass through, so stub the module. `Tag` mirrors the shipped
+// `span[data-tone]` capsule; the hooks are inert here (jsdom has no layout).
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
   const React = require('react')
   const passthrough = (props: Record<string, unknown>) => React.createElement('span', props)
@@ -22,7 +21,10 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
       React.createElement('span', { 'data-tone': props.tone ?? 'outline', className: props.className }, props.children),
     Pill: (props: { className?: string; children?: unknown }) =>
       React.createElement('span', { className: props.className }, props.children),
+    useAnchoredPosition: () => ({ left: 0, top: 0 }),
+    useDismissOnOutsidePointer: () => { /* outside clicks are covered by the pill's own tests */ },
     IconChevronDownOutline14: passthrough,
+    IconGaugeOutline16: passthrough,
   }
 })
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -153,7 +155,10 @@ function zhT(key: string, params?: Record<string, string>): string {
     'price.peakRatio': '高峰 {multiplier}',
     'price.offPeakRatio': '闲时 {multiplier}',
     'chip.title': '本回复花费 {amount}',
-    'chip.titleWithBand': '本回复花费 {amount}（{band}）',
+    'chip.detail.title': '本回复花费',
+    'chip.detail.band': '计价档位',
+    'chip.detail.model': '模型',
+    'chip.detail.snapshot': '价格快照',
     'chip.unpriced': '—',
     'refreshedAt': '更新于 {time}',
     'settings.title': '花费计价',
@@ -371,7 +376,7 @@ describe('AssistantCostChip', () => {
   const projections = (ledger: unknown, index: unknown = INDEX): never =>
     ((key: string) => (key === 'sessionCostIndex' ? index : ledger)) as never
 
-  it('renders the anchored per-reply cost as one capsule without a band tag', () => {
+  it('renders the anchored per-reply cost as one stat capsule without a band tag', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
       messageId="msg-1"
@@ -379,9 +384,30 @@ describe('AssistantCostChip', () => {
       t={zhT}
     />)
     const chip = screen.getByTestId('cost-chip')
-    expect(chip.textContent).toBe('¥3.02')
-    // The band lives in the colour + title now, not in a second tag capsule.
+    const trigger = screen.getByRole('button', { name: '¥3.02' })
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    // The band lives in the label colour and the dialog, not in a tag capsule.
     expect(chip.querySelector('[data-tone]')).toBeNull()
+  })
+
+  it('opens the anchored breakdown dialog from the capsule and closes on Escape', async () => {
+    stubFetch(RESPONSE)
+    render(<AssistantCostChip
+      messageId="msg-1"
+      useProjection={projections(PROJECTION)}
+      t={zhT}
+    />)
+    expect(screen.queryByTestId('cost-chip-detail')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '¥3.02' }))
+    const dialog = await screen.findByRole('dialog', { name: '本回复花费' })
+    const rows = [...dialog.querySelectorAll('dt')].map(node => node.textContent)
+    expect(rows).toEqual(['输入（缓存未命中）', '输入（缓存命中）', '输出', '计价档位', '模型', '价格快照'])
+    const values = [...dialog.querySelectorAll('dd')].map(node => node.textContent)
+    // Small amounts keep their magnitude-based precision (0.02 → ¥0.0200).
+    expect(values).toEqual(['¥1.00', '¥0.0200', '¥2.00', '单价', 'deepseek-v4-flash', expect.stringContaining('快照 v1')])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByTestId('cost-chip-detail')).toBeNull())
   })
 
   it('renders the dash for an unpriced reply', () => {
@@ -438,9 +464,11 @@ describe('AssistantCostChip', () => {
       />)
       const chip = screen.getByTestId('cost-chip')
       expect(chip.getAttribute('data-band')).toBe('peak')
-      expect(chip.textContent).toBe('¥3.02')
-      // The band and its multiplier still reach the reader through the title.
-      await waitFor(() => expect(chip.getAttribute('title')).toContain('高峰 2.0×'))
+      expect(screen.getByRole('button', { name: '¥3.02' })).not.toBeNull()
+      // The band and its multiplier reach the reader through the dialog.
+      fireEvent.click(screen.getByRole('button', { name: '¥3.02' }))
+      const dialog = await screen.findByRole('dialog', { name: '本回复花费' })
+      expect(dialog.textContent).toContain('高峰 2.0×')
     } finally {
       vi.useRealTimers()
     }
@@ -463,8 +491,10 @@ describe('AssistantCostChip', () => {
       />)
       const chip = screen.getByTestId('cost-chip')
       expect(chip.getAttribute('data-band')).toBe('offPeak')
-      expect(chip.textContent).toBe('¥3.02')
-      await waitFor(() => expect(chip.getAttribute('title')).toContain('闲时 0.5×'))
+      expect(screen.getByRole('button', { name: '¥3.02' })).not.toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: '¥3.02' }))
+      const dialog = await screen.findByRole('dialog', { name: '本回复花费' })
+      expect(dialog.textContent).toContain('闲时 0.5×')
     } finally {
       vi.useRealTimers()
     }

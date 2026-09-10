@@ -5,25 +5,33 @@
  * 用时 3分12秒 · 9月4日 19:47), and the chip's `order` places it after the
  * timing text, so the price closes the same row the timing facts end.
  *
- * The price is one shipped `Pill` capsule — the product's single-line control
- * (24px tall, 12px radius, module fill, 12px/18px type) — coloured by the band
- * that priced the reply: green while off-peak, red while peak, neutral before
- * the rollout. The band and its multiplier stay in the native title, so the
- * row itself shows only the number the reader came for.
+ * The control is the row's own stat-capsule shape — the same trigger + portaled
+ * dialog the shipped 用量 and 用时 capsules use (28px pill, 13px/24px tertiary
+ * label, hover fill, an `aria-expanded` dialog anchored above the trigger
+ * through `useAnchoredPosition` + `useDismissOnOutsidePointer`). Clicking it
+ * opens the reply's anchored breakdown: the three billed categories, the band
+ * that priced it, the model, and the snapshot version.
  *
- * The slot hands over only the finalized message id, so the `sessionCostIndex`
- * projection resolves it to the (turn, step) coordinates the anchored ledger
- * is keyed by; the Turn's own steps are then summed. Every price is the
- * anchored snapshot value, never a current-price recompute; an unpriced Turn
- * renders `—` (the Cost tab explains why).
+ * The price itself is the band-coloured label (green off-peak, red peak,
+ * neutral before the rollout), so the row carries the status without a second
+ * tag capsule. The slot hands over only the finalized message id, so the
+ * `sessionCostIndex` projection resolves it to the (turn, step) coordinates the
+ * anchored ledger is keyed by; the Turn's own steps are then summed. Every
+ * price is the anchored snapshot value, never a current-price recompute; an
+ * unpriced Turn renders `—` (the Cost tab explains why).
  */
-import { memo, useEffect, useState } from 'react'
-import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
+import { memo, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  IconGaugeOutline16,
+  useAnchoredPosition,
+  useDismissOnOutsidePointer,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
 import { bandForTime, peakOffPeakMultiplier } from './cost-math.ts'
-import { currencySymbol, displayCurrency, formatMoney, formatMultiplier } from './format.ts'
+import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import css from './AssistantCostChip.module.css'
 
 export type ChipLocale = PropsLocale<'cost-meter'>['t']
@@ -34,6 +42,13 @@ export interface AssistantCostChipProps {
   useProjection: UseProjection
   t: ChipLocale
 }
+
+/** Distance kept between the trigger and its dialog (the shipped stat panels' own gap). */
+const PANEL_GAP = 8
+/** Distance kept between the dialog and the viewport edges. */
+const PANEL_MARGIN = 12
+/** Pre-measurement placement: mounted but invisible, so the first frame can size it. */
+const MEASURE_STYLE = { visibility: 'hidden', left: 0, top: 0 } as const
 
 /** The projection step for one (turn, step) coordinate, if the ledger has it. */
 export function stepOf(
@@ -59,6 +74,11 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
   const cost = currency === 'USD' ? costUsd : costCny
   const index = useProjection('sessionCostIndex')
   const [response, setResponse] = useState<ConversationCostResponse | null>(null)
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLSpanElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const pos = useAnchoredPosition({ open, anchorRef: rootRef, panelRef, side: 'top', gap: PANEL_GAP, margin: PANEL_MARGIN })
+  useDismissOnOutsidePointer(rootRef, open, setOpen, panelRef)
 
   useEffect(() => {
     let alive = true
@@ -74,6 +94,15 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
     }
   }, [currency])
 
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
   // The action row carries the message id; the index carries its coordinates.
   const coordinates = index?.steps[messageId]
   const steps = coordinates === undefined ? [] : stepsOfTurn(cost?.steps, coordinates.turn)
@@ -87,11 +116,12 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
     )
   }
 
-  const total = priced.reduce((sum, entry) => sum + (entry.cost ?? 0), 0)
-  const amount = `${currencySymbol(currency)}${formatMoney(total)}`
+  const symbol = currencySymbol(currency)
+  const money = (value: number): string => `${symbol}${formatMoney(value)}`
+  const amount = money(priced.reduce((sum, entry) => sum + (entry.cost ?? 0), 0))
   // Anchored to the Turn's own (last) step: the ledger's `band` was fixed at
-  // fold time from the usage event's time, so the badge shows the band that
-  // actually priced this reply — not the band of the clock right now.
+  // fold time from the usage event's time, so the capsule is coloured by the
+  // band that actually priced this reply — not the band of the clock now.
   const last = priced[priced.length - 1]
   if (last === undefined) return null
   const band = last.band ?? bandForTime(last.time)
@@ -105,12 +135,56 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
   return (
     <span
       className={css.root}
+      ref={rootRef}
       data-cost-chip
       data-band={band === 'single' ? undefined : band}
       data-testid="cost-chip"
-      title={bandLabel === null ? t('chip.title', { amount }) : t('chip.titleWithBand', { amount, band: bandLabel })}
     >
-      <Pill>{amount}</Pill>
+      <button
+        type="button"
+        className={css.trigger}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(prev => !prev)}
+      >
+        <IconGaugeOutline16 />
+        <span className={css.label}>{amount}</span>
+      </button>
+      {open && createPortal(
+        <div
+          ref={panelRef}
+          className={css.panel}
+          role="dialog"
+          aria-label={t('chip.detail.title')}
+          style={pos ?? MEASURE_STYLE}
+          data-testid="cost-chip-detail"
+        >
+          <div className={css.title}>
+            <span className={css.titleLabel}><IconGaugeOutline16 />{t('chip.detail.title')}</span>
+            <span className={css.titleValue}>{amount}</span>
+          </div>
+          <div className={css.titleRule} aria-hidden />
+          <dl className={css.details}>
+            <dt>{t('view.uncached')}</dt>
+            <dd>{money(priced.reduce((sum, entry) => sum + entry.uncachedCost, 0))}</dd>
+            <dt>{t('view.cacheRead')}</dt>
+            <dd>{money(priced.reduce((sum, entry) => sum + entry.cacheReadCost, 0))}</dd>
+            <dt>{t('view.output')}</dt>
+            <dd>{money(priced.reduce((sum, entry) => sum + entry.outputCost, 0))}</dd>
+            <dt>{t('chip.detail.band')}</dt>
+            <dd>{bandLabel ?? t('band.single')}</dd>
+            <dt>{t('chip.detail.model')}</dt>
+            <dd>{last.model}</dd>
+            {last.snapshotVersion !== null && (
+              <>
+                <dt>{t('chip.detail.snapshot')}</dt>
+                <dd>{t('step.snapshot', { version: String(last.snapshotVersion), time: formatTime(last.snapshotEffectiveAt ?? last.time) })}</dd>
+              </>
+            )}
+          </dl>
+        </div>,
+        document.body,
+      )}
     </span>
   )
 })

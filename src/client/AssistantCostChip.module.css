@@ -1,37 +1,145 @@
-/* Per-reply cost chip inside the completed Turn's action row.
+/* Per-reply cost capsule inside the completed Turn's action row.
    The row is the product's own flex strip (copy · branch · usage · timing
    text, `align-items: center`, `gap: 8px`, 28px tall) and draws the timing
-   text last; `order` therefore parks the chip after that text, closing the row
-   with the price. No separator dot: the row's own 8px gap already sets the
-   capsule apart.
+   text last; `order` therefore parks the capsule after that text, closing the
+   row with the price, and the -6px tuck matches the shipped stat pair (用量 ·
+   用时 tuck together the same way, since both carry 8px of side padding).
 
-   The capsule itself is the shipped `Pill` (24px tall, 12px radius,
-   `bg-layer-2` fill, `0 8px` padding, 12px/18px type) — one single-line
-   control like the rest of the product — and the band only recolours its text.
-   That rule is a descendant selector so it outranks the Pill's own `color` no
-   matter which stylesheet the client injects last. The row's own
-   `data-actions-reveal` contract still hides the chip until the turn is
-   hovered; nothing here needs a reveal rule of its own. */
+   The trigger and the dialog copy the shipped stat-capsule control
+   (TurnUsagePanel / TurnTimePanel) token for token, so the price reads as one
+   more stat of the row rather than a different kind of chip. Only the label
+   colour deviates: the band that priced the reply paints it (green off-peak,
+   red peak), which is why that rule states the label's own colour — an
+   explicit child colour outranks the trigger's inherited hover colour. The
+   row's own `data-actions-reveal` contract still hides the capsule until the
+   turn is hovered; nothing here needs a reveal rule of its own. */
 
 .root {
   order: 99;
+  min-width: 0;
   display: inline-flex;
-  align-items: center;
-  font-variant-numeric: tabular-nums;
+  margin-left: -6px;
 }
 
-.root[data-band='peak'] > * {
+.trigger {
+  min-width: 0;
+  height: calc(28px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-variant-numeric: tabular-nums;
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  white-space: nowrap;
+  cursor: pointer;
+  background: 0 0;
+  border: none;
+  border-radius: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  display: inline-flex;
+}
+
+.trigger:hover,
+.trigger[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.trigger svg {
+  width: calc(15px + var(--dsh-content-font-delta, 0px));
+  height: calc(15px + var(--dsh-content-font-delta, 0px));
+  flex: none;
+}
+
+.label {
+  text-overflow: ellipsis;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.root[data-band='offPeak'] .label {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.root[data-band='peak'] .label {
   color: var(--dsw-alias-state-error-primary);
 }
 
-.root[data-band='offPeak'] > * {
-  color: var(--dsw-alias-state-success-primary);
+.panel {
+  z-index: 1100;
+  box-sizing: border-box;
+  background: var(--dsw-specific-menu);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  width: max-content;
+  min-width: min(300px, 100vw - 24px);
+  max-width: min(440px, 100vw - 24px);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+  border: 0;
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 12px;
+  line-height: 18px;
+  position: fixed;
+}
+
+.title {
+  color: var(--dsw-alias-label-primary);
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  display: flex;
+}
+
+.titleLabel {
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  display: inline-flex;
+}
+
+.titleLabel svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.titleValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.titleRule {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  margin-bottom: 10px;
+}
+
+.details {
+  color: var(--dsw-alias-label-tertiary);
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  display: grid;
+}
+
+.details dt,
+.details dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.details dd {
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .unpriced {
   order: 99;
   display: inline-flex;
   align-items: center;
+  margin-left: -6px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
