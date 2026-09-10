@@ -44,8 +44,8 @@ const POST_OFFPEAK = Date.UTC(2026, 7, 17, 12, 0, 0)
 /** 2026-08-10 12:00 Beijing (pre-rollout). */
 const PRE_ROLLOUT = Date.UTC(2026, 7, 10, 4, 0, 0)
 
-const FLASH_OFFPEAK: PriceBucket = { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 }
-const FLASH_PEAK: PriceBucket = { cacheReadPerMillion: 0.1, inputPerMillion: 3, outputPerMillion: 9 }
+const FLASH_OFFPEAK: PriceBucket = { cacheReadPerMillion: 0.02, inputPerMillion: 1, outputPerMillion: 4 }
+const FLASH_PEAK: PriceBucket = { cacheReadPerMillion: 0.04, inputPerMillion: 2, outputPerMillion: 8 }
 
 const OFFICIAL: PricingSnapshot = {
   fetchedAt: Date.now(),
@@ -143,6 +143,16 @@ describe('modelKeys', () => {
     expect(pricingKeyOfModel('deepseek-v4-pro')).toBe('pro')
     expect(pricingKeyOfModel('deepseek-v4-flash')).toBe('flash')
   })
+
+  it('maps the renamed and retired ids onto the current official keys', () => {
+    // The current ids: `deepseek-flash` is the Flash column, `deepseek-v4-pro`
+    // the Pro one. The retired `deepseek-v4-flash` / vision ids are served by
+    // V4.1-Flash and billed at the Flash price, so they must resolve as flash.
+    expect(modelKeys('deepseek', 'deepseek-flash')).toEqual(['deepseek/deepseek-flash', 'deepseek-flash', 'flash'])
+    expect(pricingKeyOfModel('deepseek-flash')).toBe('flash')
+    expect(pricingKeyOfModel('deepseek-v4-flash-vision-exp')).toBe('flash')
+    expect(pricingKeyOfModel('deepseek-v4-pro')).toBe('pro')
+  })
 })
 
 describe('snapshotForTime', () => {
@@ -214,6 +224,20 @@ describe('computePricebook priority chain', () => {
     expect(vision?.single).toEqual(FALLBACK_CURRENT.flash)
     expect(vision?.offPeak).toEqual(FALLBACK_PEAK.flash.offPeak)
     expect(vision?.peak).toEqual(FALLBACK_PEAK.flash.peak)
+  })
+
+  it('bills the retired vision id at the flash price while the page lists no third column', () => {
+    // The 2026-09-10 page carries a flash and a pro column only; its footnote
+    // states `deepseek-v4-flash-vision-exp` is served by V4.1-Flash and billed
+    // at the Flash price. No vision-specific key may therefore be created.
+    const { prices } = computePricebook(state, { current: FALLBACK_CURRENT, peak: FALLBACK_PEAK }, null, 7.2, 7.2)
+    expect(prices['deepseek-v4-flash-vision-exp']).toBeUndefined()
+    const handle = handleWith({ ...initialPricebookState(), snapshots: [snapshotFixture(1, 0, prices)] })
+    for (const model of ['deepseek-flash', 'deepseek-v4-flash', 'deepseek-v4-flash-vision-exp']) {
+      const hit = handle.priceFor('deepseek-official', model, POST_OFFPEAK)
+      expect(hit?.bucket).toEqual(FALLBACK_PEAK.flash.offPeak)
+      expect(hit?.band).toBe('offPeak')
+    }
   })
 
   it('marks the fallback source when the official fetch failed', () => {
@@ -309,6 +333,28 @@ describe('PricebookHandle priceFor', () => {
     const prices: Record<string, ModelPrice> = { flash: { source: 'official', single: FALLBACK_CURRENT.flash } }
     const handle = handleWith({ ...initialPricebookState(), snapshots: [snapshotFixture(1, 2_000, prices)] })
     expect(handle.priceFor('deepseek-official', 'deepseek-v4-flash', 1_000)?.snapshotVersion).toBe(1)
+  })
+
+  it('keeps every weekend instant off-peak: peak hours are Monday–Friday only', () => {
+    const prices: Record<string, ModelPrice> = {
+      flash: { source: 'official', single: FALLBACK_CURRENT.flash, offPeak: FLASH_OFFPEAK, peak: FLASH_PEAK },
+    }
+    const handle = handleWith({ ...initialPricebookState(), snapshots: [snapshotFixture(1, 1_000, prices)] })
+    // 2026-08-22 is a Saturday and 2026-08-23 a Sunday: 10:00 and 15:00 Beijing
+    // sit inside the peak windows on a weekday, and must stay off-peak here.
+    for (const time of [
+      Date.UTC(2026, 7, 22, 2, 0, 0), // Saturday 10:00 Beijing
+      Date.UTC(2026, 7, 22, 7, 0, 0), // Saturday 15:00 Beijing
+      Date.UTC(2026, 7, 23, 2, 0, 0), // Sunday 10:00 Beijing
+      Date.UTC(2026, 7, 23, 7, 0, 0), // Sunday 15:00 Beijing
+    ]) {
+      const hit = handle.priceFor('deepseek-official', 'deepseek-flash', time)
+      expect(hit?.band).toBe('offPeak')
+      expect(hit?.bucket).toEqual(FLASH_OFFPEAK)
+    }
+    // The same wall-clock hours on the following Monday are peak.
+    expect(handle.priceFor('deepseek-official', 'deepseek-flash', Date.UTC(2026, 7, 24, 2, 0, 0))?.band).toBe('peak')
+    expect(handle.priceFor('deepseek-official', 'deepseek-flash', Date.UTC(2026, 7, 24, 7, 0, 0))?.band).toBe('peak')
   })
 })
 

@@ -9,6 +9,8 @@ import {
   effectiveBucket,
   FALLBACK_CURRENT,
   FALLBACK_CURRENT_USD,
+  FALLBACK_PEAK,
+  FALLBACK_PEAK_USD,
   fetchPricing,
   isPeakHour,
   parseCurrentTable,
@@ -95,6 +97,50 @@ const PAGE_HTML_2026_EN = `
 <tr><td>PEAK</td><td>$1.32</td><td>$3.96</td><td>$1.32</td></tr>
 <tr><td>Concurrency Limit</td><td>2500</td><td>500</td><td>2500</td></tr>
 </table>
+</body></html>
+`
+
+/** Chinese markup of the current page (2026-09-10): one combined table whose
+ * bucket rows carry the OFF-PEAK cells then the PEAK cells of the two model
+ * columns (`deepseek-flash`, `deepseek-v4-pro`), and a footnote stating that
+ * peak hours are Beijing time 09:00-12:00 / 14:00-18:00 Monday through Friday. */
+const PAGE_HTML_2026_09_ZH = `
+<html><body>
+<h1>模型 &amp; 价格</h1>
+<table>
+<tr><td>模型</td><td>deepseek-flash</td><td>deepseek-v4-pro</td></tr>
+<tr><td rowspan="2">百万tokens输入
+（缓存命中）</td><td>空闲时段</td><td>0.02元</td><td>0.15元</td></tr>
+<tr><td>高峰时段</td><td>0.04元</td><td>0.30元</td></tr>
+<tr><td rowspan="2">百万tokens输入
+（缓存未命中）</td><td>空闲时段</td><td>1元</td><td>4.5元</td></tr>
+<tr><td>高峰时段</td><td>2元</td><td>9.0元</td></tr>
+<tr><td rowspan="2">百万tokens输出</td><td>空闲时段</td><td>4元</td><td>13.5元</td></tr>
+<tr><td>高峰时段</td><td>8元</td><td>27.0元</td></tr>
+<tr><td>并发限制</td><td>2500</td><td>500</td></tr>
+</table>
+<p>(3) 空闲时段价格为高峰时段价格的一半。高峰时段为北京时间周一至周五 9:00 - 12:00、14:00 - 18:00（其余为空闲时段）。</p>
+</body></html>
+`
+
+/** English markup of the current page (2026-09-10): the same two model columns
+ * in USD and the UTC wording of the weekday-only peak windows. */
+const PAGE_HTML_2026_09_EN = `
+<html><body>
+<h1>Models &amp; Pricing</h1>
+<table>
+<tr><td>MODEL</td><td>deepseek-flash</td><td>deepseek-v4-pro</td></tr>
+<tr><td rowspan="2">1M INPUT TOKENS
+(CACHE HIT)</td><td>OFF-PEAK</td><td>$0.003</td><td>$0.022</td></tr>
+<tr><td>PEAK</td><td>$0.006</td><td>$0.044</td></tr>
+<tr><td rowspan="2">1M INPUT TOKENS
+(CACHE MISS)</td><td>OFF-PEAK</td><td>$0.15</td><td>$0.66</td></tr>
+<tr><td>PEAK</td><td>$0.3</td><td>$1.32</td></tr>
+<tr><td rowspan="2">1M OUTPUT TOKENS</td><td>OFF-PEAK</td><td>$0.6</td><td>$1.98</td></tr>
+<tr><td>PEAK</td><td>$1.2</td><td>$3.96</td></tr>
+<tr><td>Concurrency Limit</td><td>2500</td><td>500</td></tr>
+</table>
+<p>(3) Off-peak rates are half of the peak rates. Peak hours are 01:00 - 04:00 and 06:00 - 10:00 UTC, Monday through Friday (all other hours are off-peak).</p>
 </body></html>
 `
 
@@ -232,6 +278,84 @@ describe('updated 2026-08-21 combined table', () => {
     expect(snapshot.current.vision).toEqual(snapshot.current.flash)
     expect(snapshot.peak?.vision?.peak.outputPerMillion).toBe(1.32)
     expect(snapshot.legacyCurrent).toBeUndefined()
+    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+  })
+})
+
+describe('current 2026-09-10 combined table (flash + pro, weekday-only peak)', () => {
+  it('parses the zh off-peak/peak cells and the weekday-only Beijing schedule', () => {
+    expect(parseCurrentTable(PAGE_HTML_2026_09_ZH)).toEqual({
+      flash: { cacheReadPerMillion: 0.02, inputPerMillion: 1, outputPerMillion: 4 },
+      pro: { cacheReadPerMillion: 0.15, inputPerMillion: 4.5, outputPerMillion: 13.5 },
+    })
+    expect(parsePeakTable(PAGE_HTML_2026_09_ZH)).toEqual({
+      flash: {
+        offPeak: { cacheReadPerMillion: 0.02, inputPerMillion: 1, outputPerMillion: 4 },
+        peak: { cacheReadPerMillion: 0.04, inputPerMillion: 2, outputPerMillion: 8 },
+      },
+      pro: {
+        offPeak: { cacheReadPerMillion: 0.15, inputPerMillion: 4.5, outputPerMillion: 13.5 },
+        peak: { cacheReadPerMillion: 0.3, inputPerMillion: 9, outputPerMillion: 27 },
+      },
+    })
+    // The retired `deepseek-v4-flash-vision-exp` column is gone from the page.
+    expect(parseCurrentTable(PAGE_HTML_2026_09_ZH)?.vision).toBeUndefined()
+    expect(parsePeakTable(PAGE_HTML_2026_09_ZH)?.vision).toBeUndefined()
+    expect(parsePeakSchedule(PAGE_HTML_2026_09_ZH, 'zh')).toEqual(PEAK_SCHEDULE_ZH)
+  })
+
+  it('parses the en off-peak/peak cells and the weekday-only UTC schedule', () => {
+    expect(parseCurrentTableEn(PAGE_HTML_2026_09_EN)).toEqual({
+      flash: { cacheReadPerMillion: 0.003, inputPerMillion: 0.15, outputPerMillion: 0.6 },
+      pro: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+    })
+    expect(parsePeakTableEn(PAGE_HTML_2026_09_EN)).toEqual({
+      flash: {
+        offPeak: { cacheReadPerMillion: 0.003, inputPerMillion: 0.15, outputPerMillion: 0.6 },
+        peak: { cacheReadPerMillion: 0.006, inputPerMillion: 0.3, outputPerMillion: 1.2 },
+      },
+      pro: {
+        offPeak: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
+        peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
+      },
+    })
+    expect(parsePeakSchedule(PAGE_HTML_2026_09_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+  })
+
+  it('folds the current zh page into a snapshot that matches the built-in fallback', async () => {
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => PAGE_HTML_2026_09_ZH,
+    }) as unknown as typeof fetch
+    const snapshot = await fetchPricing(fetchImpl)
+    expect(snapshot.error).toBeUndefined()
+    // Drift guard: the built-ins price every snapshot taken while the page is
+    // unreachable, so they must keep matching the live table.
+    expect(snapshot.current.flash).toEqual(FALLBACK_PEAK.flash.offPeak)
+    expect(snapshot.peak?.flash).toEqual(FALLBACK_PEAK.flash)
+    expect(snapshot.current.pro).toEqual(FALLBACK_PEAK.pro.offPeak)
+    expect(snapshot.peak?.pro).toEqual(FALLBACK_PEAK.pro)
+    expect(snapshot.legacyCurrent).toBeUndefined()
+    expect(snapshot.peakActive).toBe(true)
+    // Saturday and Sunday all day are off-peak; the same hours on Monday peak.
+    expect(isPeakHour(new Date('2026-09-12T02:00:00Z'), snapshot.schedule)).toBe(false)
+    expect(isPeakHour(new Date('2026-09-13T07:00:00Z'), snapshot.schedule)).toBe(false)
+    expect(isPeakHour(new Date('2026-09-14T02:00:00Z'), snapshot.schedule)).toBe(true)
+  })
+
+  it('folds the current en page into a USD snapshot that matches the built-in fallback', async () => {
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      text: async () => PAGE_HTML_2026_09_EN,
+    }) as unknown as typeof fetch
+    const snapshot = await fetchPricing(fetchImpl, 15_000, 'en')
+    expect(snapshot.error).toBeUndefined()
+    expect(snapshot.current.flash).toEqual(FALLBACK_PEAK_USD.flash.offPeak)
+    expect(snapshot.peak?.flash).toEqual(FALLBACK_PEAK_USD.flash)
+    expect(snapshot.current.pro).toEqual(FALLBACK_PEAK_USD.pro.offPeak)
+    expect(snapshot.peak?.pro).toEqual(FALLBACK_PEAK_USD.pro)
     expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 })
@@ -384,7 +508,7 @@ describe('effectiveBucket', () => {
   })
 
   it('falls back to the built-in peak table when the page carried none', () => {
-    expect(effectiveBucket(FALLBACK_CURRENT, undefined, true, at(10), 'flash').inputPerMillion).toBe(3)
-    expect(effectiveBucket(FALLBACK_CURRENT, undefined, true, at(20), 'flash').inputPerMillion).toBe(1.5)
+    expect(effectiveBucket(FALLBACK_CURRENT, undefined, true, at(10), 'flash').inputPerMillion).toBe(2)
+    expect(effectiveBucket(FALLBACK_CURRENT, undefined, true, at(20), 'flash').inputPerMillion).toBe(1)
   })
 });

@@ -86,12 +86,12 @@ describe('foldSessionCost pricing and anchoring', () => {
     expect(step.priced).toBe(true)
     expect(step.band).toBe('peak')
     expect(step.snapshotVersion).toBe(1)
-    // 1M × 3 + 1M × 0.1 + 1M × 9 = 12.1
-    expect(step.cost).toBeCloseTo(12.1)
-    expect(step.uncachedCost).toBeCloseTo(3)
-    expect(step.cacheReadCost).toBeCloseTo(0.1)
-    expect(step.outputCost).toBeCloseTo(9)
-    expect(state.totals.cost).toBeCloseTo(12.1)
+    // 1M × 2 + 1M × 0.04 + 1M × 8 = 10.04
+    expect(step.cost).toBeCloseTo(10.04)
+    expect(step.uncachedCost).toBeCloseTo(2)
+    expect(step.cacheReadCost).toBeCloseTo(0.04)
+    expect(step.outputCost).toBeCloseTo(8)
+    expect(state.totals.cost).toBeCloseTo(10.04)
     expect(state.totals.pricedSteps).toBe(1)
   })
 
@@ -100,8 +100,8 @@ describe('foldSessionCost pricing and anchoring', () => {
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000), handle)
     state = foldSessionCost(state, usageEvent(POST_OFFPEAK, 1, 1, { inputTokens: 1_000_000, outputTokens: 1_000_000 }), handle)
-    // 1M × 1.5 + 1M × 4.5 = 6
-    expect(viewSessionCost(state).steps[0].cost).toBeCloseTo(6)
+    // 1M × 1 + 1M × 4 = 5
+    expect(viewSessionCost(state).steps[0].cost).toBeCloseTo(5)
     expect(viewSessionCost(state).steps[0].band).toBe('offPeak')
   })
 

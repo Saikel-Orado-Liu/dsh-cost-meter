@@ -48,7 +48,7 @@ export const DEFAULT_FX_RATE = 7.2
 export const DEFAULT_CACHE_READ_DISCOUNT = 0.25
 /** Default OpenRouter model-id → canonical key aliases (editable). */
 export const DEFAULT_ALIASES: Record<string, string> = {
-  'deepseek/deepseek-chat': 'deepseek-v4-flash',
+  'deepseek/deepseek-chat': 'deepseek-flash',
   'deepseek/deepseek-reasoner': 'deepseek-v4-pro',
 }
 /** Free exchange-rate endpoint (no key); returns `rates.CNY` for USD base. */
@@ -143,6 +143,12 @@ export const PRICEBOOK_DOMAIN_USD = defineDomain({
 /**
  * Map a model id to its official pricing key: anything containing `pro`
  * prices as pro, `flash` as flash. Mirror of the client-side helper.
+ *
+ * The official page's current ids are `deepseek-flash` and
+ * `deepseek-v4-pro`; the retired ids `deepseek-v4-flash` and
+ * `deepseek-v4-flash-vision-exp` are still accepted by the API but are served
+ * by V4.1-Flash and billed at the Flash price, which is exactly what this
+ * mapping yields for them (no `pro` in the id ⇒ `flash`).
  * @param model - the model id.
  * @returns the pricing key.
  */
@@ -394,16 +400,19 @@ export function computePricebook(
     }
   }
 
-  // The vision model gets its own canonical key once the page lists it, so a
-  // future price split from flash resolves through the specific key first.
-  const visionKey = 'deepseek-v4-flash-vision-exp'
-  const visionPeak = peakTable.vision ?? fallbackPeak.vision ?? fallbackPeak.flash
-  if (prices[visionKey] === undefined && (official.current.vision !== undefined || peakTable.vision !== undefined)) {
-    prices[visionKey] = {
+  // A third model column, when the page carries one, gets its own canonical
+  // key so a price split away from flash resolves through the specific key
+  // first. The gate reads the OFFICIAL page only: the 2026-09-10 page lists
+  // just flash and pro, and the retired `deepseek-v4-flash-vision-exp` id is
+  // then intentionally left without a key of its own so it falls through to
+  // `flash` — the price the page says that id is billed at.
+  const thirdColumnKey = 'deepseek-v4-flash-vision-exp'
+  if (prices[thirdColumnKey] === undefined && official.current.vision !== undefined) {
+    prices[thirdColumnKey] = {
       source: officialSource,
       single: singleTable.vision ?? singleTable.flash,
-      offPeak: visionPeak.offPeak,
-      peak: visionPeak.peak,
+      offPeak: official.peak?.vision?.offPeak ?? official.current.vision,
+      peak: official.peak?.vision?.peak ?? official.current.vision,
     }
   }
 

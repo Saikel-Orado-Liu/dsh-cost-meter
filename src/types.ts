@@ -83,14 +83,15 @@ export interface PriceBucket {
 
 /** One model's price set under the current (pre-rollout) official list. */
 export interface CurrentPricing {
-  /** deepseek-v4-flash prices. */
+  /** Flash-model prices (`deepseek-flash`). */
   flash: PriceBucket
-  /** deepseek-v4-pro prices. */
+  /** `deepseek-v4-pro` prices. */
   pro: PriceBucket
   /**
-   * deepseek-v4-flash-vision-exp prices; present once the official page
-   * lists the model in its own column (the page started doing so on
-   * 2026-08-21).
+   * Third-column prices, present only while the official page lists a third
+   * model of its own (the 2026-08-21 page listed
+   * `deepseek-v4-flash-vision-exp` there). The 2026-09-10 page carries two
+   * columns, and the retired vision id is billed at the Flash price instead.
    */
   vision?: PriceBucket
 }
@@ -103,11 +104,11 @@ export interface PeakModelPricing {
   peak: PriceBucket
 }
 
-/** The full upcoming peak/off-peak table for both models. */
+/** The full peak/off-peak table for both models. */
 export interface PeakPricing {
   flash: PeakModelPricing
   pro: PeakModelPricing
-  /** Present once the official page lists deepseek-v4-flash-vision-exp. */
+  /** Third-column peak prices; present only while the page lists a third model. */
   vision?: PeakModelPricing
 }
 

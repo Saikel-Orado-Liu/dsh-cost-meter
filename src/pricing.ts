@@ -1,8 +1,18 @@
 /**
  * Official DeepSeek pricing: fetches the pricing page
- * (api-docs.deepseek.com/zh-cn/quick_start/pricing/) and parses both the
- * current list prices and the upcoming peak/off-peak table, so price changes
- * and the 2026-08-17 peak-pricing rollout never require a plugin update.
+ * (api-docs.deepseek.com/zh-cn/quick_start/pricing/) and parses the price
+ * table, the peak/off-peak bands, and the peak-hour schedule, so price
+ * changes, model renames, and schedule changes never require a plugin update.
+ *
+ * The page's shape as of 2026-09-10: one combined table whose bucket rows
+ * carry the OFF-PEAK cells then the PEAK cells of the `deepseek-flash` and
+ * `deepseek-v4-pro` columns, plus a footnote stating that peak hours are
+ * Beijing time 09:00-12:00 / 14:00-18:00 Monday through Friday (01:00-04:00 /
+ * 06:00-10:00 UTC), everything else — including all of Saturday and Sunday —
+ * off-peak. The retired ids `deepseek-v4-flash` and
+ * `deepseek-v4-flash-vision-exp` no longer have a column; the page states
+ * they are served by V4.1-Flash and billed at the Flash price, which is what
+ * the `flash` pricing key resolves them to.
  *
  * The parser is deliberately tolerant: it matches price cells next to the
  * bucket labels and model names anywhere in the HTML, so reordering or
@@ -24,9 +34,9 @@ export const PRICING_URL_EN = 'https://api-docs.deepseek.com/quick_start/pricing
 export const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0)
 
 /**
- * Built-in fallback zh peak schedule: the official announcement's windows in
- * Beijing time (peak 09:00-12:00 / 14:00-18:00, Monday–Friday; everything
- * else, including all of Saturday and Sunday, off-peak).
+ * Built-in fallback zh peak schedule: the official page's windows in Beijing
+ * time (peak 09:00-12:00 / 14:00-18:00, Monday–Friday; everything else,
+ * including all of Saturday and Sunday, off-peak).
  */
 export const PEAK_SCHEDULE_ZH: PeakSchedule = {
   timezone: 'Asia/Shanghai',
@@ -47,10 +57,14 @@ export const PEAK_SCHEDULE_EN: PeakSchedule = {
 }
 
 /**
- * Built-in fallback prices: the official list for deepseek-v4-flash and
- * deepseek-v4-pro (CNY per 1M tokens). DeepSeek bills cache writes at the
- * uncached input price (its wire usage reports only cache-hit vs cache-miss
- * buckets), so no separate cache-write rate exists.
+ * Built-in fallback prices: the pre-rollout official list for the Flash and
+ * Pro models (CNY per 1M tokens), kept as the historical `single` tier that
+ * prices usage from before the 2026-08-17 peak rollout. The Flash column is
+ * served by `deepseek-flash`; the retired ids `deepseek-v4-flash` and
+ * `deepseek-v4-flash-vision-exp` are billed at the same Flash price.
+ * DeepSeek bills cache writes at the uncached input price (its wire usage
+ * reports only cache-hit vs cache-miss buckets), so no separate cache-write
+ * rate exists.
  */
 export const FALLBACK_CURRENT: CurrentPricing = {
   flash: { cacheReadPerMillion: 0.02, inputPerMillion: 1, outputPerMillion: 2 },
@@ -58,13 +72,17 @@ export const FALLBACK_CURRENT: CurrentPricing = {
 }
 
 /**
- * Built-in fallback for the upcoming peak table: the 2026-08-17 schedule
- * (peak hours double the off-peak half).
+ * Built-in fallback for the peak table: the 2026-09-10 official list (CNY per
+ * 1M tokens), i.e. the `deepseek-flash` and `deepseek-v4-pro` columns. The
+ * peak half is twice the off-peak half, as the page's footnote states. These
+ * values back every snapshot taken while the page is unreachable, so they must
+ * track the live page — a stale pair silently reprices usage (the Flash column
+ * used to be 0.05 / 1.5 / 4.5 off-peak before the V4.1-Flash price cut).
  */
 export const FALLBACK_PEAK: PeakPricing = {
   flash: {
-    offPeak: { cacheReadPerMillion: 0.05, inputPerMillion: 1.5, outputPerMillion: 4.5 },
-    peak: { cacheReadPerMillion: 0.1, inputPerMillion: 3, outputPerMillion: 9 },
+    offPeak: { cacheReadPerMillion: 0.02, inputPerMillion: 1, outputPerMillion: 4 },
+    peak: { cacheReadPerMillion: 0.04, inputPerMillion: 2, outputPerMillion: 8 },
   },
   pro: {
     offPeak: { cacheReadPerMillion: 0.15, inputPerMillion: 4.5, outputPerMillion: 13.5 },
@@ -78,11 +96,15 @@ export const FALLBACK_CURRENT_USD: CurrentPricing = {
   pro: { cacheReadPerMillion: 0.022, inputPerMillion: 0.66, outputPerMillion: 1.98 },
 }
 
-/** Built-in fallback USD peak table from the English pricing page. */
+/**
+ * Built-in fallback USD peak table from the English pricing page
+ * (2026-09-10 list: Flash 0.003 / 0.15 / 0.6 off-peak, Pro 0.022 / 0.66 /
+ * 1.98 off-peak, the peak half doubling each).
+ */
 export const FALLBACK_PEAK_USD: PeakPricing = {
   flash: {
-    offPeak: { ...FALLBACK_CURRENT_USD.flash },
-    peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
+    offPeak: { cacheReadPerMillion: 0.003, inputPerMillion: 0.15, outputPerMillion: 0.6 },
+    peak: { cacheReadPerMillion: 0.006, inputPerMillion: 0.3, outputPerMillion: 1.2 },
   },
   pro: {
     offPeak: { ...FALLBACK_CURRENT_USD.pro },
