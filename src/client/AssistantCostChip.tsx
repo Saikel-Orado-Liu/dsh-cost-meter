@@ -1,9 +1,10 @@
 /**
- * Per-reply cost, appended to the completed Turn's action row. Rendered
- * through the `conversation.chat.assistant-actions` list slot: DSH 0.1.5
- * renders those entries inside the action row itself (copy · branch · usage ·
- * 用时 3分12秒 · 9月4日 19:47), and the chip's `order` places it after the
- * timing text, so the price closes the same row the timing facts end.
+ * Per-reply cost, rendered in the completed Turn's action row. Contributed
+ * through the `conversation.chat.assistant-actions` list slot, whose entries
+ * DSH 0.1.5 draws in the row's action area — right after the copy action and
+ * ahead of the branch button and of the 用量 / 用时 / 9月4日 19:47 readouts that
+ * close the row — so the price lands before the timing facts, spaced by the
+ * row's own 8px gap.
  *
  * The control is the row's own stat-capsule shape — the same trigger + portaled
  * dialog the shipped 用量 and 用时 capsules use (28px pill, 13px/24px tertiary

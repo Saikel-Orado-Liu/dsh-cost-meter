@@ -1,9 +1,10 @@
 /* Per-reply cost capsule inside the completed Turn's action row.
    The row is the product's own flex strip (copy · branch · usage · timing
-   text, `align-items: center`, `gap: 8px`, 28px tall) and draws the timing
-   text last; `order` therefore parks the capsule after that text, closing the
-   row with the price, and the -6px tuck matches the shipped stat pair (用量 ·
-   用时 tuck together the same way, since both carry 8px of side padding).
+   text, `align-items: center`, `gap: 8px`, 28px tall). The capsule keeps the
+   position the `assistant-actions` slot hands it — the action area right after
+   the copy action, ahead of the branch button and of the 用量 / 用时 / timing
+   readouts that close the row — so no `order` is set and the row's own 8px gap
+   spaces it from its neighbours.
 
    The trigger and the dialog copy the shipped stat-capsule control
    (TurnUsagePanel / TurnTimePanel) token for token, so the price reads as one
@@ -15,10 +16,8 @@
    turn is hovered; nothing here needs a reveal rule of its own. */
 
 .root {
-  order: 99;
   min-width: 0;
   display: inline-flex;
-  margin-left: -6px;
 }
 
 .trigger {
@@ -136,10 +135,8 @@
 }
 
 .unpriced {
-  order: 99;
   display: inline-flex;
   align-items: center;
-  margin-left: -6px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
   font-size: var(--dsh-content-font-size-secondary, 13px);
