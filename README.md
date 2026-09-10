@@ -29,11 +29,11 @@ Then start the harness:
 npx @deepseek-ai/dsh web
 ```
 
-If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `>=0.1.1-rc.1 <0.2.0` (current local version `0.1.1-rc.1`). The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `^0.1.5-alpha.1`. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Overview
 
-Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange, and the 2026-08-17 peak/off-peak rollout; on 2026-08-21 the official zh/en pages were redesigned into a combined table with three model columns and OFF-PEAK/PEAK cells), and a conversation spans many turns with cache-hit, cache-miss, cache-write, and output token buckets. Naively recomputing costs at *current* prices makes history drift every time the price table changes.
+Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange, the 2026-08-17 peak/off-peak rollout, and the 2026-09-10 model rename to `deepseek-flash` with its V4.1-Flash price cut), and a conversation spans many turns with cache-hit, cache-miss, cache-write, and output token buckets. Naively recomputing costs at *current* prices makes history drift every time the price table changes.
 
 **Cost Meter** solves this with an **append-only pricebook**: every price/fx/band-table change starts a new immutable `PricebookSnapshot` (monotonic `version`, `effectiveAt`), and each usage event anchors to the snapshot effective at its own time. The result is an immutable per-step cost ledger that only grows — it never mutates. Live streaming estimates are explicitly labeled 估算/estimate because they use *current* prices; they are replaced by the exact anchored value once the step settles.
 
@@ -43,8 +43,8 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 |---|---|
 | Cost anchoring | Append-only pricebook snapshots; step cost computed once at the event's own time |
 | Price sources | Manual override > official pricing page > built-in fallback > OpenRouter (fallback only, USD→CNY) > none |
-| Official page | Parses both the 2026-08-21 combined zh/en tables (including the `deepseek-v4-flash-vision-exp` column and the English UTC schedule) and the legacy split tables; the built-in historical list still anchors `single` when the page no longer carries one |
-| Peak pricing | 2026-08-17 00:00 Beijing rollout; peak windows apply Monday–Friday only (the zh and en pages may state different timezones; fallback 09:00–12:00 / 14:00–18:00 Beijing), weekends and all other hours off-peak at half price |
+| Official page | Parses the current 2026-09-10 combined zh/en tables (the `deepseek-flash` / `deepseek-v4-pro` columns with OFF-PEAK/PEAK cells per bucket row, and the English UTC schedule) as well as the earlier combined and legacy split tables; the retired `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` ids have no column of their own and bill at the Flash price, exactly as the page states. The built-in list still anchors `single` when the page no longer carries a pre-rollout table |
+| Peak pricing | 2026-08-17 00:00 Beijing rollout; peak windows apply Monday–Friday only (the zh and en pages may state different timezones; fallback 09:00–12:00 / 14:00–18:00 Beijing), so Saturdays, Sundays, and all other hours are off-peak at half price |
 | Cost formula | Uncached input + cache reads (hit rate) + cache writes (billed at uncached input rate) + output, per 1M tokens, CNY |
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
 | Subagent support | BFS over the live agent tree; conversation totals = main session + descendants |
