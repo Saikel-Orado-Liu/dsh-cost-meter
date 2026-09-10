@@ -1,24 +1,31 @@
 /* Per-reply cost chip inside the completed Turn's action row.
    The row is the product's own flex strip (copy · branch · usage · timing
    text, `align-items: center`, `gap: 8px`, 28px tall) and draws the timing
-   text last; `order` therefore parks the chip after that text, closing the
-   row with the price. No separator dot: the row's own 8px gap and the Tag
-   capsule already set it apart. The type mirrors the row's timing text
-   (timeEnd: label-tertiary, `--dsh-content-font-size-secondary`, 24px line
-   box), so the price reads as one more fact of the same metadata run. The
-   row's own `data-actions-reveal` contract still hides it until the turn is
-   hovered; nothing here needs its own reveal rule. */
+   text last; `order` therefore parks the chip after that text, closing the row
+   with the price. No separator dot: the row's own 8px gap already sets the
+   capsule apart.
+
+   The capsule itself is the shipped `Pill` (24px tall, 12px radius,
+   `bg-layer-2` fill, `0 8px` padding, 12px/18px type) — one single-line
+   control like the rest of the product — and the band only recolours its text.
+   That rule is a descendant selector so it outranks the Pill's own `color` no
+   matter which stylesheet the client injects last. The row's own
+   `data-actions-reveal` contract still hides the chip until the turn is
+   hovered; nothing here needs a reveal rule of its own. */
 
 .root {
   order: 99;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--dsw-alias-label-tertiary);
-  white-space: nowrap;
-  font-size: var(--dsh-content-font-size-secondary, 13px);
-  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   font-variant-numeric: tabular-nums;
+}
+
+.root[data-band='peak'] > * {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.root[data-band='offPeak'] > * {
+  color: var(--dsw-alias-state-success-primary);
 }
 
 .unpriced {

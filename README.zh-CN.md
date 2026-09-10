@@ -60,7 +60,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 |---|---|---|
 | 输入框下方读数 | `conversation.composer.dock` | 锚定的本会话花费 + 账户余额，每分钟刷新；悬停查看分类明细与快照信息 |
 | 花费标签页 | `conversation.view` | 全对话总花费（主会话 + 子代理）、分类小计、子代理列表与逐回复锚定账本 |
-| 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，紧跟该轮动作行末尾的用时文本；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标（无价格时显示 `—`） |
+| 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，做成一个官方 `Pill` 胶囊并紧跟该轮动作行末尾的用时文本，按计价档位着色（闲时绿、高峰红）；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标，档位与倍率放在 title 里（无价格时显示 `—`） |
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
 | 插件配置卡 | `settings.plugin.item` | 按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新 |
 

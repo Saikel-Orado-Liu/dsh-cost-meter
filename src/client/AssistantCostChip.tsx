@@ -5,16 +5,20 @@
  * 用时 3分12秒 · 9月4日 19:47), and the chip's `order` places it after the
  * timing text, so the price closes the same row the timing facts end.
  *
+ * The price is one shipped `Pill` capsule — the product's single-line control
+ * (24px tall, 12px radius, module fill, 12px/18px type) — coloured by the band
+ * that priced the reply: green while off-peak, red while peak, neutral before
+ * the rollout. The band and its multiplier stay in the native title, so the
+ * row itself shows only the number the reader came for.
+ *
  * The slot hands over only the finalized message id, so the `sessionCostIndex`
  * projection resolves it to the (turn, step) coordinates the anchored ledger
  * is keyed by; the Turn's own steps are then summed. Every price is the
  * anchored snapshot value, never a current-price recompute; an unpriced Turn
- * renders `—` (the Cost tab explains why). The band rides the shipped `Tag`
- * capsule (11px/17px, `success` off-peak / `danger` peak), i.e. the same tag
- * geometry the rest of the product uses.
+ * renders `—` (the Cost tab explains why).
  */
 import { memo, useEffect, useState } from 'react'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Pill } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
@@ -99,9 +103,14 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
       : null
 
   return (
-    <span className={css.root} data-cost-chip title={t('chip.title', { amount })} data-testid="cost-chip">
-      {amount}
-      {bandLabel !== null && <Tag tone={band === 'peak' ? 'danger' : 'success'}>{bandLabel}</Tag>}
+    <span
+      className={css.root}
+      data-cost-chip
+      data-band={band === 'single' ? undefined : band}
+      data-testid="cost-chip"
+      title={bandLabel === null ? t('chip.title', { amount }) : t('chip.titleWithBand', { amount, band: bandLabel })}
+    >
+      <Pill>{amount}</Pill>
     </span>
   )
 })

@@ -6,9 +6,10 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // The real ui-primitives pulls KaTeX stylesheets Node cannot load; the
-// surfaces only need Tooltip/Button/Tag/icons to pass through, so stub the
-// module. `Tag` mirrors the shipped contract that matters here: a
-// `span[data-tone]` capsule carrying the render site's children and class.
+// surfaces only need Tooltip/Button/Tag/Pill/icons to pass through, so stub
+// the module. `Tag` and `Pill` mirror the shipped contracts that matter here:
+// a `span[data-tone]` capsule, and a plain capsule span carrying the render
+// site's children and class.
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
   const React = require('react')
   const passthrough = (props: Record<string, unknown>) => React.createElement('span', props)
@@ -19,10 +20,12 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
       React.createElement('button', { type: 'button', onClick: props.onClick, disabled: props.disabled }, props.children),
     Tag: (props: { tone?: string; className?: string; children?: unknown }) =>
       React.createElement('span', { 'data-tone': props.tone ?? 'outline', className: props.className }, props.children),
+    Pill: (props: { className?: string; children?: unknown }) =>
+      React.createElement('span', { className: props.className }, props.children),
     IconChevronDownOutline14: passthrough,
   }
 })
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../src/types.ts'
 import { AssistantCostChip, stepOf, stepsOfTurn } from '../src/client/AssistantCostChip.tsx'
 import { cacheReadRatioOf, estimateCost, estimateTokens, peakOffPeakMultiplier } from '../src/client/cost-math.ts'
@@ -150,6 +153,7 @@ function zhT(key: string, params?: Record<string, string>): string {
     'price.peakRatio': '高峰 {multiplier}',
     'price.offPeakRatio': '闲时 {multiplier}',
     'chip.title': '本回复花费 {amount}',
+    'chip.titleWithBand': '本回复花费 {amount}（{band}）',
     'chip.unpriced': '—',
     'refreshedAt': '更新于 {time}',
     'settings.title': '花费计价',
@@ -367,14 +371,17 @@ describe('AssistantCostChip', () => {
   const projections = (ledger: unknown, index: unknown = INDEX): never =>
     ((key: string) => (key === 'sessionCostIndex' ? index : ledger)) as never
 
-  it('renders the anchored per-reply cost of the message own Turn', () => {
+  it('renders the anchored per-reply cost as one capsule without a band tag', () => {
     stubFetch(RESPONSE)
     render(<AssistantCostChip
       messageId="msg-1"
       useProjection={projections(PROJECTION)}
       t={zhT}
     />)
-    expect(screen.getByTestId('cost-chip').textContent).toContain('¥3.02')
+    const chip = screen.getByTestId('cost-chip')
+    expect(chip.textContent).toBe('¥3.02')
+    // The band lives in the colour + title now, not in a second tag capsule.
+    expect(chip.querySelector('[data-tone]')).toBeNull()
   })
 
   it('renders the dash for an unpriced reply', () => {
@@ -413,8 +420,8 @@ describe('AssistantCostChip', () => {
     expect(screen.queryByTestId('cost-chip')).toBeNull()
   })
 
-  it('marks the per-reply cost chip red with the peak extra multiplier of the ROUND', async () => {
-    // The badge follows the round's OWN time (the anchored ledger band),
+  it('colours the per-reply capsule red with the peak band of the ROUND', async () => {
+    // The capsule follows the round's OWN time (the anchored ledger band),
     // not the wall clock: the ledger says peak while "now" is off-peak.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-08-17T00:30:00+08:00'))
@@ -429,17 +436,17 @@ describe('AssistantCostChip', () => {
         useProjection={projections(peakLedger)}
         t={zhT}
       />)
-      await screen.findByText(/2.0×/)
-      // The band rides the shipped Tag capsule: peak ⇒ `danger` tone.
-      const badge = screen.getByTestId('cost-chip').querySelector('[data-tone="danger"]')
-      expect(badge?.textContent).toContain('高峰')
-      expect(badge?.textContent).toContain('2.0×')
+      const chip = screen.getByTestId('cost-chip')
+      expect(chip.getAttribute('data-band')).toBe('peak')
+      expect(chip.textContent).toBe('¥3.02')
+      // The band and its multiplier still reach the reader through the title.
+      await waitFor(() => expect(chip.getAttribute('title')).toContain('高峰 2.0×'))
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('marks the per-reply cost chip green with the off-peak saving of the ROUND', async () => {
+  it('colours the per-reply capsule green with the off-peak band of the ROUND', async () => {
     // The ledger says off-peak even while the wall clock is in a peak hour.
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-08-17T10:00:00+08:00'))
@@ -454,10 +461,10 @@ describe('AssistantCostChip', () => {
         useProjection={projections(offPeakLedger)}
         t={zhT}
       />)
-      await screen.findByText(/0.5×/)
-      const badge = screen.getByTestId('cost-chip').querySelector('[data-tone="success"]')
-      expect(badge?.textContent).toContain('闲时')
-      expect(badge?.textContent).toContain('0.5×')
+      const chip = screen.getByTestId('cost-chip')
+      expect(chip.getAttribute('data-band')).toBe('offPeak')
+      expect(chip.textContent).toBe('¥3.02')
+      await waitFor(() => expect(chip.getAttribute('title')).toContain('闲时 0.5×'))
     } finally {
       vi.useRealTimers()
     }
