@@ -79,6 +79,32 @@ function responder() {
   return { state, res }
 }
 
+/**
+ * The subagent half of `makeContext`: a durable subagent listing, a live
+ * session store holding the child, and the ledger the projection registry
+ * answers for it. Deliberately NO `agents` service — the route must count a
+ * nested, already-settled subagent without a live Agent in the registry.
+ */
+function withSubagentTree(harness: Harness): Harness {
+  const child = { id: 'child-1' }
+  const root = { id: 'root' }
+  const services = new Map<string, unknown>([
+    ['subagents', {
+      listDescendants: async (rootSessionId: string) => {
+        if (rootSessionId !== 'root') return []
+        return [{ kind: 'child' as const, id: 'child-1', parentId: 'root', depth: 1, label: 'probe' }]
+      },
+    }],
+    ['sessions', {
+      get: (id: string) => (id === 'child-1' ? child : id === 'root' ? root : undefined),
+      list: () => [root, child],
+    }],
+  ])
+  const original = harness.ctx.get
+  harness.ctx.get = ((name: string) => (services.get(name) ?? original(name))) as Context['get']
+  return harness
+}
+
 const req = (method: string, host = '127.0.0.1:3080', body?: unknown): IncomingMessageLike => ({
   method,
   headers: { host },
@@ -162,5 +188,44 @@ describe('apply integration', () => {
     const put = responder()
     await route.handler(req('PUT') as never, put.res as never)
     expect(put.state.status).toBe(405)
+  })
+
+  it('serves the durable subagent tree totals for the requesting session', async () => {
+    const harness = makeContext()
+    const totals = { uncachedCost: 0.5, cacheReadCost: 0.1, outputCost: 0.3, cost: 0.9, pricedSteps: 2, unpricedSteps: 0, steps: 2 }
+    harness.ctx.sessionProjections.snapshot = (session: { id: string }) => ({
+      asOfSeq: 0,
+      values: String(session.id) === 'child-1'
+        ? { sessionCost: { model: null, steps: [], totals }, sessionCostUsd: { model: null, steps: [], totals } }
+        : {},
+    }) as never
+    withSubagentTree(harness)
+    await apply(harness.ctx, { pricingRefreshHours: 1 })
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')!
+    const { state, res } = responder()
+    const request = { method: 'GET', headers: { host: '127.0.0.1:3080' }, url: '/cost-meter?session=root' }
+    await route.handler(request as never, res as never)
+    expect(state.status).toBe(200)
+    const body = JSON.parse(state.body) as ConversationCostResponse
+    expect(body.subagents).toHaveLength(1)
+    expect(body.subagents[0]?.sessionId).toBe('child-1')
+    expect(body.subagents[0]?.parentId).toBe('root')
+    expect(body.subagents[0]?.depth).toBe(1)
+    expect(body.subagents[0]?.label).toBe('probe')
+    expect(body.subagents[0]?.totals.cost).toBeCloseTo(0.9)
+  })
+
+  it('answers without subagents when the durable listing fails', async () => {
+    const harness = makeContext()
+    withSubagentTree(harness)
+    harness.ctx.get = ((name: string) => (name === 'subagents'
+      ? { listDescendants: async () => { throw new Error('sessionQuery unavailable') } }
+      : undefined)) as Context['get']
+    await apply(harness.ctx, { pricingRefreshHours: 1 })
+    const route = harness.routes.find(candidate => candidate.path === '/cost-meter')!
+    const { state, res } = responder()
+    await route.handler(req('GET', '127.0.0.1:3080') as never, res as never)
+    expect(state.status).toBe(200)
+    expect((JSON.parse(state.body) as ConversationCostResponse).subagents).toEqual([])
   })
 })

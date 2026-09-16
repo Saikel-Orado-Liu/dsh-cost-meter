@@ -382,7 +382,22 @@ export interface SessionCostProjection {
 export interface SubagentCost {
   /** The subagent session id. */
   sessionId: string
-  /** The subagent's anchored totals (empty ledger → all zeros). */
+  /**
+   * The durable direct parent: the root conversation for a top-level
+   * subagent, or another subagent for a nested delegation. Absent only for a
+   * row the runtime ownership fallback discovered.
+   */
+  parentId?: string
+  /**
+   * Edge distance from the requested conversation (direct children are `1`),
+   * as recorded by the durable session lineage. `-1` marks a row discovered
+   * through the live agent registry, whose runtime relation states no
+   * root-relative distance.
+   */
+  depth: number
+  /** The child's durable creation label, when its descriptor carries one. */
+  label?: string
+  /** The subagent's anchored totals (no ledger yet → the row is omitted). */
   totals: SessionCostTotals
 }
 

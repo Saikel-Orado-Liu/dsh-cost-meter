@@ -104,7 +104,18 @@ const RESPONSE: ConversationCostResponse = {
 /** A host-aggregated subagent entry for subagent assertions. */
 const SUBAGENT: ConversationCostResponse['subagents'][number] = {
   sessionId: 'sub-1234',
+  parentId: 's1',
+  depth: 1,
   totals: { uncachedCost: 0.2, cacheReadCost: 0.1, outputCost: 0.4, cost: 0.7, pricedSteps: 3, unpricedSteps: 0, steps: 3 },
+}
+
+/** A nested (grandchild-level) subagent row, as the durable tree reports it. */
+const NESTED_SUBAGENT: ConversationCostResponse['subagents'][number] = {
+  sessionId: 'sub-5678',
+  parentId: 'sub-1234',
+  depth: 2,
+  label: 'nested probe',
+  totals: { uncachedCost: 0.3, cacheReadCost: 0, outputCost: 0.2, cost: 0.5, pricedSteps: 1, unpricedSteps: 0, steps: 1 },
 }
 
 /** Plain zh dictionary bound to the components' t seat. */
@@ -115,6 +126,7 @@ function zhT(key: string, params?: Record<string, string>): string {
     'line.cacheRead': '缓存输入 {amount}',
     'line.output': '输出 {amount}',
     'line.subagent': '子代理 {amount}',
+    'subagent.depth': '第 {depth} 层',
     'balance.label': '余额 {amount}',
     'balance.failed': '余额不可用',
     'balance.detail': '余额 {amount}（赠送 {granted} · 充值 {toppedUp}）',
@@ -230,18 +242,29 @@ describe('estimate helpers', () => {
   })
 
   it('combines main and subagent totals and isolates the subagent spend', async () => {
-    const { combineTotals, subagentSpend } = await import('../src/client/cost-math.ts')
+    const { combineTotals, costLookupFor, subagentSpend } = await import('../src/client/cost-math.ts')
     const main = PROJECTION.totals
     const combined = combineTotals(main, [SUBAGENT])
     expect(combined?.cost).toBeCloseTo(3.72)
     expect(combined?.uncachedCost).toBeCloseTo(1.2)
     expect(combined?.cacheReadCost).toBeCloseTo(0.12)
     expect(combined?.outputCost).toBeCloseTo(2.4)
-    expect(subagentSpend([SUBAGENT])).toBeCloseTo(0.7)
+    // Nested rows are summed into the same combined total, at any depth.
+    expect(combineTotals(main, [SUBAGENT, NESTED_SUBAGENT])?.cost).toBeCloseTo(4.22)
+    expect(subagentSpend([SUBAGENT, NESTED_SUBAGENT])).toBeCloseTo(1.2)
     expect(subagentSpend(undefined)).toBe(0)
     // Without subagents the combined totals are the main totals by reference.
     expect(combineTotals(main, undefined)).toBe(main)
-    expect(combineTotals(undefined, [SUBAGENT])).toBeUndefined()
+    // A conversation whose own ledger is not materialized still totals its
+    // subagents instead of rendering nothing.
+    expect(combineTotals(undefined, [SUBAGENT])?.cost).toBeCloseTo(0.7)
+    expect(combineTotals(undefined, undefined)).toBeUndefined()
+    // costLookupFor is the single read every surface uses.
+    const lookup = costLookupFor(undefined, [SUBAGENT, NESTED_SUBAGENT])
+    expect(lookup.mainSpend).toBe(0)
+    expect(lookup.subagentTotal).toBeCloseTo(1.2)
+    expect(lookup.combined?.cost).toBeCloseTo(1.2)
+    expect(costLookupFor(main, undefined).combined).toBe(main)
   })
 })
 
@@ -295,6 +318,28 @@ describe('SessionCostLine', () => {
     />)
     // Combined: uncached 1.2 → 1.20 · cacheRead 0.12 → 0.1200 · output 2.4 → 2.40.
     await screen.findByText('缓存输入 ¥0.1200 · 非缓存输入 ¥1.20 · 输出 ¥2.40 · 本会话 ¥3.02 · 子代理 ¥0.7000 · 余额 ¥110.00')
+  })
+
+  it('sums nested subagent rows into the same strip, at every depth', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
+    render(<SessionCostLine
+      useProjection={() => PROJECTION as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    // Combined = main 3.02 + direct child 0.70 + grandchild 0.50 = 4.22;
+    // uncached 1 + 0.2 + 0.3 = 1.50, output 2 + 0.4 + 0.2 = 2.60.
+    await screen.findByText('缓存输入 ¥0.1200 · 非缓存输入 ¥1.50 · 输出 ¥2.60 · 本会话 ¥3.02 · 子代理 ¥1.20 · 余额 ¥110.00')
+  })
+
+  it('still totals subagents when the main ledger is not materialized', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT], balance: null })
+    render(<SessionCostLine
+      useProjection={() => undefined as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    await screen.findByText('缓存输入 ¥0.1000 · 非缓存输入 ¥0.5000 · 输出 ¥0.6000 · 本会话 ¥0.00 · 子代理 ¥1.20')
   })
 
   it('hides the balance when the pricebook toggle disables it', async () => {
@@ -520,6 +565,29 @@ describe('SessionCostPill', () => {
     }
   })
 
+  it('shows the whole conversation total including nested subagents', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
+    render(<SessionCostPill
+      useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
+      useProjection={() => PROJECTION as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    // main 3.02 + 0.70 + 0.50 (grandchild) = 4.22
+    await screen.findByText('花费 ¥4.22')
+  })
+
+  it('keeps the pill when only subagent ledgers are materialized', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
+    render(<SessionCostPill
+      useSession={((selector: (s: never) => unknown) => selector({ running: false } as never)) as never}
+      useProjection={() => undefined as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    await screen.findByText('花费 ¥1.20')
+  })
+
   it('shows the streaming estimate while running', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-08-16T12:00:00+08:00'))
@@ -709,6 +777,37 @@ describe('CostView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('lists every nesting level of the subagent tree with its depth', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
+    render(<CostView
+      useProjection={() => PROJECTION as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    await screen.findByTestId('cost-view-subagents')
+    const rows = screen.getAllByTestId('cost-subagent')
+    expect(rows.map(row => row.getAttribute('data-depth'))).toEqual(['1', '2'])
+    expect(rows[0]?.textContent).toContain('sub-1234')
+    // The grandchild row names its depth and indents by one level (14px).
+    expect(rows[1]?.textContent).toContain('第 2 层')
+    expect(rows[1]?.querySelector('span')?.getAttribute('style')).toContain('padding-left: 14px')
+    // The section total is the sum of both rows.
+    expect(screen.getByTestId('cost-view-subagents').textContent).toContain('子代理 ¥1.20')
+  })
+
+  it('still renders the subagent section when the main ledger is absent', async () => {
+    stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
+    render(<CostView
+      useProjection={() => undefined as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    await screen.findByTestId('cost-view-subagents')
+    expect(screen.queryByTestId('cost-view-empty')).toBeNull()
+    expect(screen.getByTestId('cost-view').textContent).toContain('总花费')
+    expect(screen.getAllByTestId('cost-subagent')).toHaveLength(2)
   })
 })
 

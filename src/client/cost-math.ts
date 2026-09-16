@@ -52,20 +52,61 @@ export function subagentSpend(subagents: readonly SubagentCost[] | undefined): n
 }
 
 /**
+ * Select the conversation's main ledger, the host-aggregated subagent rows,
+ * and their combined totals together, so no surface has to remember which
+ * pointer to compare against which total.
+ *
+ * All three are derived consistently: `combined` sums the main ledger with
+ * EVERY subagent row the host served — including nested ones — and is defined
+ * whenever either side has data. A conversation whose own ledger is not
+ * materialized yet (a session switch mid-flight, or a host that serves no main
+ * ledger) therefore still totals its subagents instead of rendering nothing.
+ *
+ * `main` is `null` when the main ledger is absent, in which case `mainSpend`
+ * is unknown (the dock shows 0 for a session with no spend of its own).
+ * @param main - the main session's projection totals, or undefined.
+ * @param subagents - the host-aggregated subagent rows.
+ * @returns the main readout, the subagent rows, combined totals, and both spend figures.
+ */
+export function costLookupFor(
+  main: SessionCostTotals | undefined,
+  subagents: readonly SubagentCost[] | undefined,
+): {
+  main: SessionCostTotals | undefined
+  subagents: readonly SubagentCost[]
+  combined: SessionCostTotals | undefined
+  mainSpend: number
+  subagentTotal: number
+} {
+  const rows = subagents ?? []
+  const combined = combineTotals(main, rows)
+  return {
+    main,
+    subagents: rows,
+    combined,
+    mainSpend: main?.cost ?? 0,
+    subagentTotal: sumTotals(rows.map(entry => entry.totals)).cost,
+  }
+}
+
+/**
  * The conversation-wide totals: the main session's ledger plus every
- * subagent's ledger (host-aggregated). Undefined while the main ledger is
- * absent; identical to the main totals without subagents.
+ * subagent's ledger (host-aggregated, all nesting levels). Undefined only when
+ * neither side carries a ledger.
  * @param main - the main session's projection totals.
  * @param subagents - the host-aggregated subagent totals.
- * @returns the combined totals, or undefined.
+ * @returns the combined totals, or undefined without any ledger.
  */
 export function combineTotals(
   main: SessionCostTotals | undefined,
   subagents: readonly SubagentCost[] | undefined,
 ): SessionCostTotals | undefined {
-  if (main === undefined) return undefined
-  if (subagents === undefined || subagents.length === 0) return main
-  return sumTotals([main, ...subagents.map(entry => entry.totals)])
+  const rows = subagents ?? []
+  if (main === undefined) {
+    return rows.length === 0 ? undefined : sumTotals(rows.map(entry => entry.totals))
+  }
+  if (rows.length === 0) return main
+  return sumTotals([main, ...rows.map(entry => entry.totals)])
 }
 
 /**

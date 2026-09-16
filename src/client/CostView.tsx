@@ -14,7 +14,7 @@ import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ConversationCostResponse, SessionCostStep } from '../types.ts'
-import { bandForTime, combineTotals, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
+import { bandForTime, costLookupFor, peakOffPeakMultiplier } from './cost-math.ts'
 import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import css from './CostView.module.css'
 
@@ -29,6 +29,15 @@ export interface CostViewProps {
 /** Map an unpriced reason to its localized copy. */
 function reasonText(step: SessionCostStep, t: CostViewLocale): string {
   return t(`reason.${step.unpricedReason ?? 'NO_PRICE'}` as 'reason.NO_PRICE')
+}
+
+/**
+ * Indent a subagent row by its root-relative depth, so the nested delegation
+ * chain reads as a chain. Depth `-1` (`0`) marks a row the runtime fallback
+ * discovered, which states no distance: it keeps the top-level inset.
+ */
+function subagentIndent(depth: number): { paddingLeft: string } {
+  return { paddingLeft: `${Math.max(0, depth - 1) * 14}px` }
 }
 
 export const CostView = memo(function CostView({ useProjection, sessionId, t }: CostViewProps) {
@@ -53,15 +62,20 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
     }
   }, [sessionId, currency])
 
-  if (cost === undefined || cost.steps.length === 0) {
+  const rows = cost?.steps ?? []
+  const lookup = costLookupFor(cost?.totals, response?.subagents)
+  const subagents = lookup.subagents
+  const combined = lookup.combined
+  const subSpend = lookup.subagentTotal
+  const money = (value: number | null): string => value === null ? '—' : `${symbol}${formatMoney(value)}`
+
+  // A conversation whose OWN ledger is not materialized yet but whose
+  // subagents spent money is not "no cost data": the subagent section below
+  // still has something true to say.
+  if (combined === undefined) {
     return <div className={css.root} data-testid="cost-view-empty">{t('view.empty')}</div>
   }
-
-  const rows = cost.steps
-  const combined = combineTotals(cost.totals, response?.subagents)
-  const totals = combined ?? cost.totals
-  const subSpend = subagentSpend(response?.subagents)
-  const money = (value: number | null): string => value === null ? '—' : `${symbol}${formatMoney(value)}`
+  const totals = combined
 
   return (
     <div className={css.root} data-testid="cost-view">
@@ -78,20 +92,24 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
         {totals.unpricedSteps > 0 && (
           <div className={css.unpricedNote}>{t('view.unpriced', { count: String(totals.unpricedSteps) })}</div>
         )}
-        {response !== null && response.subagents.length > 0 && (
+        {subagents.length > 0 && (
           <section className={css.subagents} data-testid="cost-view-subagents">
             <div className={css.unpricedNote}>{t('line.subagent', { amount: `${symbol}${formatMoney(subSpend)}` })}</div>
             <ol className={css.stepList}>
-              {response.subagents.map(sub => (
-                <li key={sub.sessionId} className={css.step}>
+              {subagents.map(sub => (
+                <li key={sub.sessionId} className={css.step} data-testid="cost-subagent" data-depth={String(sub.depth)}>
                   <div className={css.stepHead}>
-                    <span className={css.stepTurn}>{sub.sessionId.slice(0, 8)}</span>
-                    <span className={css.stepCost}>{money(sub.totals.cost)}</span>
+                    <span className={css.stepTurn} style={subagentIndent(sub.depth)}>{sub.sessionId.slice(0, 8)}</span>
+                    {sub.depth > 1 && (
+                      <span className={css.stepModel}>{t('subagent.depth', { depth: String(sub.depth) })}</span>
+                    )}
+                    {sub.label !== undefined && <span className={css.stepModel}>{sub.label}</span>}
+                    <span className={css.stepCost}>{money(sub.totals?.cost ?? null)}</span>
                   </div>
                   <div className={css.stepBody}>
-                    <span>{t('view.uncached')}: {money(sub.totals.uncachedCost)}</span>
-                    <span>{t('view.cacheRead')}: {money(sub.totals.cacheReadCost)}</span>
-                    <span>{t('view.output')}: {money(sub.totals.outputCost)}</span>
+                    <span>{t('view.uncached')}: {money(sub.totals?.uncachedCost ?? null)}</span>
+                    <span>{t('view.cacheRead')}: {money(sub.totals?.cacheReadCost ?? null)}</span>
+                    <span>{t('view.output')}: {money(sub.totals?.outputCost ?? null)}</span>
                   </div>
                 </li>
               ))}

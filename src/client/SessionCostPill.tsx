@@ -26,7 +26,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: merges the contextPressure key into SessionProjectionMap.
 import type {} from '@deepseek-ai/dsh-token-meter/client'
 import type { ConversationCostResponse, SessionCostProjection } from '../types.ts'
-import { bandForTime, blocksOutputTokens, bucketAt, cacheReadRatioOf, combineTotals, estimateCost, peakOffPeakMultiplier, subagentSpend } from './cost-math.ts'
+import { bandForTime, blocksOutputTokens, bucketAt, cacheReadRatioOf, costLookupFor, estimateCost, peakOffPeakMultiplier } from './cost-math.ts'
 import { currencySymbol, displayCurrency, formatMoney, formatMultiplier, formatTime } from './format.ts'
 import { ENDPOINT, REFRESH_MS } from './SessionCostLine.tsx'
 import css from './SessionCostPill.module.css'
@@ -109,9 +109,12 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
   const model = projection?.model ?? null
   const snapshot = response?.pricebook.current ?? null
   const schedule = response?.pricebook.schedule
-  const subagents = response?.subagents
-  const combined = combineTotals(projection?.totals, subagents)
-  const subSpend = subagentSpend(subagents)
+  // The pill reads the WHOLE conversation: the main ledger plus every subagent
+  // row the host served (all nesting levels), so a nested delegation is folded
+  // into the same number the dock line and the Cost tab show.
+  const lookup = costLookupFor(projection?.totals, response?.subagents)
+  const combined = lookup.combined
+  const subSpend = lookup.subagentTotal
   const symbol = currencySymbol(currency)
 
   // The estimate projects the TOTAL once the running reply settles: the
@@ -128,7 +131,10 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
     return (combined?.cost ?? 0) + stepEstimate
   }, [running, projection, combined, snapshot, schedule, model, pressure, partial, currency])
 
-  if (projection === undefined && estimate === null) return null
+  // Absent main ledger + present subagent rows still renders: the pill exists
+  // to answer "what did this conversation cost", and a conversation whose own
+  // steps are not materialized yet still spent its subagents' money.
+  if (combined === undefined && estimate === null) return null
 
   const total = combined?.cost ?? 0
   const label = estimate !== null

@@ -37,7 +37,12 @@ import {
 } from './pricebook.ts'
 import { sessionCostProjection } from './session-cost-projection.ts'
 import { sessionCostIndexProjection } from './session-cost-index.ts'
-import { collectSubagentCosts, type SubagentAgentsService, type SubagentSessionsService } from './subagent-cost.ts'
+import {
+  collectSubagentCosts,
+  type SubagentAgentsService,
+  type SubagentSessionsService,
+  type SubagentTreeService,
+} from './subagent-cost.ts'
 import type { BalanceInfo, BalanceSnapshot, ConversationCostResponse, ModelPrice, PricebookView, WireBalanceResponse } from './types.ts'
 
 export type * from './types.ts'
@@ -315,7 +320,10 @@ export const SETTINGS_NAMESPACE = 'cost-meter' as SettingsNamespace
  * register the `sessionCost` / `sessionCostUsd` ledgers and the
  * `sessionCostIndex` message index, register the /cost-meter
  * route (GET view + POST settings/refresh), and keep the balance and the
- * official pricing fresh.
+ * official pricing fresh. The route aggregates the whole subagent tree below
+ * the requesting session (the durable `subagents.listDescendants` listing,
+ * with the live agent registry as fallback), so nested delegation at any
+ * depth is included in the served totals.
  * @param ctx - host context.
  * @param config - plugin config (schema defaults applied by the Loader).
  */
@@ -451,11 +459,12 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
   const buildResponse = async (rootSessionId: string | undefined, currency: 'CNY' | 'USD'): Promise<ConversationCostResponse> => {
     const agents = ctx.get('agents') as SubagentAgentsService | undefined
     const sessionsStore = ctx.get('sessions') as SubagentSessionsService | undefined
+    const subagentTree = ctx.get('subagents') as SubagentTreeService | undefined
     const pricebook = currency === 'USD' ? pricebookUsd : pricebookCny
     const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
-    const subagents = rootSessionId === undefined || agents === undefined || sessionsStore === undefined
+    const subagents = rootSessionId === undefined || sessionsStore === undefined
       ? []
-      : collectSubagentCosts(rootSessionId, agents, sessionsStore, ctx.sessionProjections, projectionKey)
+      : await collectSubagentCosts(rootSessionId, agents, sessionsStore, ctx.sessionProjections, projectionKey, subagentTree)
     return {
       balance: await refresh(),
       pricebook: pricebook.view(),

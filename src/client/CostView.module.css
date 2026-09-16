@@ -59,6 +59,13 @@
   gap: 8px;
 }
 
+.subagents {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
 .stepsTitle {
   margin: 0;
   font-size: 13px;

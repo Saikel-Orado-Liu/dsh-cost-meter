@@ -47,7 +47,8 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 | Peak pricing | 2026-08-17 00:00 Beijing rollout; peak windows apply Monday–Friday only (the zh and en pages may state different timezones; fallback 09:00–12:00 / 14:00–18:00 Beijing), so Saturdays, Sundays, and all other hours are off-peak at half price |
 | Cost formula | Uncached input + cache reads (hit rate) + cache writes (billed at uncached input rate) + output, per 1M tokens, CNY |
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
-| Subagent support | BFS over the live agent tree; conversation totals = main session + descendants |
+| Subagent support | Enumerates the conversation's durable subagent tree through `subagents.listDescendants` (nested delegations, settled children, and cold subagent sessions included, with no depth cap); falls back to a BFS over the live agent tree when that service is not mounted |
+| Conversation total | Main session + every descendant subagent (any depth); subagent totals still render while the main session's own ledger is not materialized |
 | UI surfaces | Composer dock · Cost tab · per-reply chip · header pill (live estimate) · settings card |
 | Locale | Simplified Chinese (source) + English |
 | Complexity | Fully synchronous fold; O(1) price lookups via in-memory mirror |
@@ -59,7 +60,7 @@ Once installed, the plugin contributes five browser surfaces (all text shown in 
 | Surface | Slot | Description |
 |---|---|---|
 | Composer dock readout | `conversation.composer.dock` | Anchored session spend + account balance, refreshed every minute; hover for the category breakdown and snapshot info |
-| Cost view tab | `conversation.view` | Whole-conversation totals (main + subagents), category totals, per-subagent list, and the per-reply anchored ledger |
+| Cost view tab | `conversation.view` | Whole-conversation totals (main + every subagent nesting level), category totals, the per-subagent list with its depth, and the per-reply anchored ledger |
 | Per-reply cost chip | `conversation.chat.assistant-actions` | The anchored cost of one finalized reply as the row's own stat capsule — the same trigger + anchored dialog the shipped 用量 and 用时 capsules use (28px pill, hover fill, `aria-expanded` dialog above the trigger). It closes the row's stat run: after 用量 and 用时, before the timestamp, spaced by the row's own gap, and coloured by the band that priced it (green off-peak, red peak). The dialog lists the three billed categories, the band with its multiplier, the model, and the snapshot version; the slot hands over the message id, which the `sessionCostIndex` projection resolves to ledger coordinates (dash `—` when unpriced) |
 | Header pill | `conversation.session.header.utilities` | Anchored total, or a live `≈ ¥x.xx (estimate)` while streaming; click for the detail panel |
 | Plugin card | `settings.plugin.item` | Per-model overrides, OpenRouter aliases, cache-read discount, FX mode, toggles, and manual refresh |
@@ -85,7 +86,7 @@ src/
   pricebook.ts                  # Append-only snapshots, priority chain, storage domain
   session-cost-projection.ts    # sessionCost projection (immutable per-step ledger)
   session-cost-index.ts         # sessionCostIndex: message id → ledger coordinates
-  subagent-cost.ts              # BFS subagent cost aggregation
+  subagent-cost.ts              # Subagent cost aggregation (durable tree + live-registry fallback)
   invariant.ts                  # Route-disposer symmetry invariant companion
   client/                       # Browser half: 5 slot components + math/format/locales
 shared/
@@ -104,7 +105,7 @@ pnpm test        # vitest run (hermetic, network stubbed)
 pnpm build       # tsc -b && tsdown (lib/ + lib/client.js)
 ```
 
-The test suites are fully offline: pricing-page HTML, OpenRouter models, and the FX endpoint are all stubbed. Tests cover the trust fence, balance parsing, the pricebook priority chain and snapshot selection, the immutable ledger fold (including same-step replacement and peak/off-peak band selection at the *event* time), subagent BFS aggregation, and the client surfaces (jsdom).
+The test suites are fully offline: pricing-page HTML, OpenRouter models, and the FX endpoint are all stubbed. Tests cover the trust fence, balance parsing, the pricebook priority chain and snapshot selection, the immutable ledger fold (including same-step replacement and peak/off-peak band selection at the *event* time), the subagent aggregation (nested and cold children, listing-failure fallback, and a multi-level chain over a real `SessionStore` plus projection registry), and the client surfaces (jsdom).
 
 ## Documentation
 

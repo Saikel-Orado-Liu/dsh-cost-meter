@@ -16,7 +16,7 @@ import type { UseProjection } from '@deepseek-ai/dsh-api-session-controller/clie
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-ui-slots'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { BalanceSnapshot, ConversationCostResponse, SessionCostProjection } from '../types.ts'
-import { combineTotals, subagentSpend } from './cost-math.ts'
+import { costLookupFor } from './cost-math.ts'
 import { currencySymbol, displayCurrency, formatMoney, formatTime } from './format.ts'
 import css from './SessionCostLine.module.css'
 
@@ -111,16 +111,18 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
 
   const balance = response?.balance
   const balanceEnabled = response?.pricebook?.balanceEnabled !== false
-  const subagents = response?.subagents
-  const combined = combineTotals(cost?.totals, subagents)
-  const subSpend = subagentSpend(subagents)
+  // The dock line totals the WHOLE conversation: the main ledger plus every
+  // subagent row the host served, nested levels included.
+  const lookup = costLookupFor(cost?.totals, response?.subagents)
+  const combined = lookup.combined
+  const subSpend = lookup.subagentTotal
   // The dock readout must never vanish on a session switch: switching
   // sessions re-binds the projection hook, and until the new session's
   // baseline has carried the sessionCost key useProjection returns
   // undefined (capability absent - never a usable signal). Treat a
   // missing ledger as a zero ledger so the row renders CNY 0.00
   // instead of disappearing while the baseline is in flight.
-  const mainSpend = cost?.totals?.cost ?? 0
+  const mainSpend = lookup.mainSpend
 
   const parts: string[] = []
   try {
@@ -148,10 +150,17 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
   if (parts.length === 0) return null
 
   const model = cost?.model?.model
+  const subagents = lookup.subagents
   const tooltipParts = useMemo(() => {
     const rows: string[] = []
     try {
       rows.push(...costDetail(cost, model, t, currency))
+      // One row per subagent, indent-free but depth-tagged: the same tree the
+      // Cost tab lists, visible from the dock without opening a view.
+      for (const subagent of subagents) {
+        const label = subagent.depth > 1 ? `${subagent.sessionId.slice(0, 8)} (${t('subagent.depth', { depth: String(subagent.depth) })})` : subagent.sessionId.slice(0, 8)
+        rows.push(`${label} ${currencySymbol(currency)}${formatMoney(subagent.totals?.cost ?? 0)}`)
+      }
       if (subSpend > 0) {
         rows.push(t('line.subagent', { amount: `${currencySymbol(currency)}${formatMoney(subSpend)}` }))
       }
@@ -170,7 +179,7 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
       /* keep the row alive */
     }
     return rows
-  }, [cost, model, t, balance, balanceEnabled, response, subSpend, currency])
+  }, [cost, model, t, balance, balanceEnabled, response, subSpend, subagents, currency])
 
   const line = parts.join(' · ')
   const tooltip = tooltipParts.filter(Boolean).join(' · ')
