@@ -5,9 +5,10 @@
  * deployment without a subagents service, and the totals summation.
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectSubagentCosts,
+  resetColdLedgerCache,
   sumTotals,
   type SubagentAgentsService,
   type SubagentProjectionsService,
@@ -223,6 +224,125 @@ describe('collectSubagentCosts — runtime ownership fallback', () => {
     const result = await collectSubagentCosts('root', agents, sessions, projections)
     expect(result).toHaveLength(1)
     expect(result[0]?.sessionId).toBe('child-a')
+  })
+})
+
+describe('collectSubagentCosts — cold ledger restore', () => {
+  // The cold fold cache is process-global; every case here starts empty so a
+  // fold from an earlier case can never stand in for the log under test.
+  beforeEach(() => resetColdLedgerCache())
+
+  /** A durable listing whose children carry NO live session and NO live ledger. */
+  function makeColdTree(
+    descendants: { id: string; parentId: string; depth: number }[],
+    logs: Record<string, SessionCostTotals>,
+    options: { unreadable?: string[]; failing?: string[] } = {},
+  ) {
+    const unreadable = new Set(options.unreadable ?? [])
+    const failing = new Set(options.failing ?? [])
+    const restored: string[] = []
+    return {
+      restored,
+      sessions: { get: () => undefined, list: () => [] } as SubagentSessionsService,
+      projections: {
+        snapshot: () => ({ values: {} }) as never,
+        restore: (_checkpoint: Record<string, unknown>, events: readonly unknown[], _baseSeq: unknown) => {
+          // The stored log is identified by its first event, which the fake
+          // query stamps with the session id.
+          const sessionId = String((events[0] as { sessionId: string }).sessionId)
+          restored.push(sessionId)
+          if (failing.has(sessionId)) throw new Error(`fold failed for ${sessionId}`)
+          const totals = logs[sessionId]
+          return { snapshot: { asOfSeq: events.length - 1, values: totals === undefined ? {} : { sessionCost: { totals } } } }
+        },
+      } as unknown as SubagentProjectionsService,
+      query: {
+        readSession: async (sessionId: string) => {
+          if (unreadable.has(sessionId)) throw new Error(`cannot read ${sessionId}`)
+          return { session: { id: sessionId } as never, inheritedEventCount: 0, events: [{ sessionId } as never] }
+        },
+      },
+      subagents: {
+        listDescendants: async () => descendants.map(entry => ({ kind: 'child' as const, ...entry })),
+      } as SubagentTreeService,
+    }
+  }
+
+  it('restores cold children from their stored logs when nothing is live', async () => {
+    const tree = makeColdTree(
+      [
+        { id: 'cold-child', parentId: 'root', depth: 1 },
+        { id: 'cold-grandchild', parentId: 'cold-child', depth: 2 },
+      ],
+      { 'cold-child': TOTALS_A, 'cold-grandchild': TOTALS_B },
+    )
+    const result = await collectSubagentCosts(
+      'root',
+      undefined,
+      tree.sessions,
+      tree.projections,
+      'sessionCost',
+      tree.subagents,
+      tree.query,
+    )
+    expect(result.map(entry => entry.sessionId)).toEqual(['cold-child', 'cold-grandchild'])
+    expect(result.map(entry => entry.depth)).toEqual([1, 2])
+    expect(sumTotals(result.map(entry => entry.totals)).cost).toBeCloseTo(4.6)
+    // The stored log is folded at seq 0 with an empty checkpoint.
+    expect(tree.restored).toEqual(['cold-child', 'cold-grandchild'])
+  })
+
+  it('reuses a recent cold fold instead of refolding the same log', async () => {
+    const tree = makeColdTree([{ id: 'cached-child', parentId: 'root', depth: 1 }], { 'cached-child': TOTALS_A })
+    await collectSubagentCosts('root', undefined, tree.sessions, tree.projections, 'sessionCost', tree.subagents, tree.query)
+    await collectSubagentCosts('root', undefined, tree.sessions, tree.projections, 'sessionCost', tree.subagents, tree.query)
+    expect(tree.restored).toEqual(['cached-child'])
+  })
+
+  it('skips an unreadable or unfoldable child without dropping the rest', async () => {
+    const tree = makeColdTree(
+      [
+        { id: 'unreadable', parentId: 'root', depth: 1 },
+        { id: 'broken', parentId: 'root', depth: 1 },
+        { id: 'fine', parentId: 'root', depth: 1 },
+      ],
+      { unreadable: TOTALS_A, broken: TOTALS_A, fine: TOTALS_B },
+      { failing: ['broken'] },
+    )
+    // 'unreadable' must be listed but absent from the log reader's failures.
+    tree.query.readSession = (async (sessionId: string) => {
+      if (sessionId === 'unreadable') throw new Error('pruned')
+      return { session: { id: sessionId } as never, inheritedEventCount: 0, events: [{ sessionId } as never] }
+    }) as never
+
+    const result = await collectSubagentCosts(
+      'root',
+      undefined,
+      tree.sessions,
+      tree.projections,
+      'sessionCost',
+      tree.subagents,
+      tree.query,
+    )
+    expect(result.map(entry => entry.sessionId)).toEqual(['fine'])
+    expect(result[0]?.totals.cost).toBeCloseTo(1.5)
+  })
+
+  it('prefers the live ledger over the stored log for a resident child', async () => {
+    const { agents, sessions, projections } = makeTree({ root: ['child'] }, { child: TOTALS_A })
+    const reads: string[] = []
+    const result = await collectSubagentCosts(
+      'root',
+      agents,
+      sessions,
+      projections,
+      'sessionCost',
+      { listDescendants: async () => [{ kind: 'child', id: 'child', parentId: 'root', depth: 1 }] },
+      { readSession: async (id: string) => { reads.push(id); return { session: {} as never, inheritedEventCount: 0, events: [] } } },
+    )
+    expect(result.map(entry => entry.sessionId)).toEqual(['child'])
+    expect(result[0]?.totals.cost).toBeCloseTo(3.1)
+    expect(reads).toEqual([])
   })
 })
 

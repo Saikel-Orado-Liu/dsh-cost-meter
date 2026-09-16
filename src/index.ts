@@ -40,6 +40,7 @@ import { sessionCostIndexProjection } from './session-cost-index.ts'
 import {
   collectSubagentCosts,
   type SubagentAgentsService,
+  type SubagentQueryService,
   type SubagentSessionsService,
   type SubagentTreeService,
 } from './subagent-cost.ts'
@@ -460,11 +461,20 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     const agents = ctx.get('agents') as SubagentAgentsService | undefined
     const sessionsStore = ctx.get('sessions') as SubagentSessionsService | undefined
     const subagentTree = ctx.get('subagents') as SubagentTreeService | undefined
+    const sessionQuery = ctx.get('sessionQuery') as SubagentQueryService | undefined
     const pricebook = currency === 'USD' ? pricebookUsd : pricebookCny
     const projectionKey = currency === 'USD' ? 'sessionCostUsd' : 'sessionCost'
     const subagents = rootSessionId === undefined || sessionsStore === undefined
       ? []
-      : await collectSubagentCosts(rootSessionId, agents, sessionsStore, ctx.sessionProjections, projectionKey, subagentTree)
+      : await collectSubagentCosts(
+        rootSessionId,
+        agents,
+        sessionsStore,
+        ctx.sessionProjections,
+        projectionKey,
+        subagentTree,
+        sessionQuery,
+      )
     return {
       balance: await refresh(),
       pricebook: pricebook.view(),

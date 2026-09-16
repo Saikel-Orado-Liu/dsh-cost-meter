@@ -47,7 +47,7 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 | Peak pricing | 2026-08-17 00:00 Beijing rollout; peak windows apply Monday–Friday only (the zh and en pages may state different timezones; fallback 09:00–12:00 / 14:00–18:00 Beijing), so Saturdays, Sundays, and all other hours are off-peak at half price |
 | Cost formula | Uncached input + cache reads (hit rate) + cache writes (billed at uncached input rate) + output, per 1M tokens, CNY |
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
-| Subagent support | Enumerates the conversation's durable subagent tree through `subagents.listDescendants` (nested delegations, settled children, and cold subagent sessions included, with no depth cap); falls back to a BFS over the live agent tree when that service is not mounted |
+| Subagent support | Enumerates the conversation's durable subagent tree through `subagents.listDescendants` (nested delegations, settled children, and cold subagent sessions included, with no depth cap); a ledger is read from the resident session's projection when available and otherwise cold-restored from the child's stored log (`sessionQuery.readSession` + `sessionProjections.restore`), so historical subagent spend is also counted after a host restart; falls back to a BFS over the live agent tree when neither service is mounted |
 | Conversation total | Main session + every descendant subagent (any depth); subagent totals still render while the main session's own ledger is not materialized |
 | UI surfaces | Composer dock · Cost tab · per-reply chip · header pill (live estimate) · settings card |
 | Locale | Simplified Chinese (source) + English |
