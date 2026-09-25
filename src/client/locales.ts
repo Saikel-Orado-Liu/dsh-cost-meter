@@ -69,8 +69,24 @@ export const zh = {
   'balance.suspended': '账户已暂停付费请求',
   'refreshedAt': '更新于 {time}',
 
-  // Plugin configuration card
+  // Dock capsule detail (the shipped stat-dialog shape: `<dt>` label, `<dd>` value)
+  'dock.detail.title': '本会话花费',
+  'dock.row.session': '本会话',
+  'dock.row.subagent': '子代理（含下级）',
+  'dock.row.own': '本会话自身',
+  'dock.row.uncached': '输入（缓存未命中）',
+  'dock.row.cacheRead': '输入（缓存命中）',
+  'dock.row.output': '输出',
+  'dock.row.balance': '账户余额',
+  'dock.row.model': '模型',
+  'dock.row.snapshot': '价格快照',
+  'dock.row.source': '价格来源',
+  'dock.row.updated': '更新时间',
+  'dock.row.unpriced': '无价格步数',
+
+  // Plugin configuration page
   'settings.title': '花费计价',
+  'settings.summary': '快照锚定的会话花费与价格表',
   'settings.current': '当前快照 · {source} · {time}',
   'settings.noSnapshot': '尚无价格快照',
   'settings.refresh': '立即刷新',
@@ -86,6 +102,9 @@ export const zh = {
   'settings.save': '保存',
   'settings.discard': '丢弃',
   'settings.saved': '已保存',
+  'settings.rejected': '主机拒绝了这次修改',
+  'settings.unavailable': '此部署未向本页提供可编辑的配置',
+  'settings.overridden': '已自定义',
   'settings.error': '操作失败：{error}',
   'settings.jsonHint': 'JSON 对象，键为模型，值含 single/offPeak/peak 价格桶',
 } as const
@@ -151,7 +170,22 @@ export const en: Record<ConversationCostKey, string> = {
   'balance.suspended': 'Account suspended for paid requests',
   'refreshedAt': 'Updated at {time}',
 
+  'dock.detail.title': 'Session cost',
+  'dock.row.session': 'This session',
+  'dock.row.subagent': 'Subagents (all levels)',
+  'dock.row.own': 'This session only',
+  'dock.row.uncached': 'Input (cache miss)',
+  'dock.row.cacheRead': 'Input (cache hit)',
+  'dock.row.output': 'Output',
+  'dock.row.balance': 'Account balance',
+  'dock.row.model': 'Model',
+  'dock.row.snapshot': 'Price snapshot',
+  'dock.row.source': 'Price source',
+  'dock.row.updated': 'Updated',
+  'dock.row.unpriced': 'Unpriced steps',
+
   'settings.title': 'Cost meter',
+  'settings.summary': 'Snapshot-anchored session cost and price table',
   'settings.current': 'Current snapshot · {source} · {time}',
   'settings.noSnapshot': 'No price snapshot yet',
   'settings.refresh': 'Refresh now',
@@ -167,6 +201,9 @@ export const en: Record<ConversationCostKey, string> = {
   'settings.save': 'Save',
   'settings.discard': 'Discard',
   'settings.saved': 'Saved',
+  'settings.rejected': 'The Host refused this edit',
+  'settings.unavailable': 'This deployment serves no editable configuration to this page',
+  'settings.overridden': 'overridden',
   'settings.error': 'Operation failed: {error}',
   'settings.jsonHint': 'JSON object keyed by model; values carry single/offPeak/peak price buckets',
 }

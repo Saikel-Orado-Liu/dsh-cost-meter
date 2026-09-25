@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
-import { apply, type Config } from '../src/index.ts'
+import { apply, Config } from '../src/index.ts'
 import type { ConversationCostResponse } from '../src/types.ts'
 
 /** The official pricing page markup the stub fetch serves. */
@@ -136,6 +136,31 @@ afterEach(() => {
 })
 
 describe('apply integration', () => {
+  it('marks exactly the live preferences volatile and leaves deployment config plain', () => {
+    // DSH 0.1.7 derives a plugin's configuration page from this schema: a field
+    // is editable only beneath a volatile node (see SettingsForms.volatileForm).
+    // Losing a volatile marker silently removes the field from the Plugins page,
+    // so the split itself is pinned here.
+    const schema = Config as unknown as { dict: Record<string, { meta?: { volatile?: boolean } }> }
+    const volatile = Object.entries(schema.dict)
+      .filter(([, node]) => node.meta?.volatile === true)
+      .map(([key]) => key)
+      .sort()
+    expect(volatile).toEqual([
+      'aliases',
+      'balanceEnabled',
+      'cacheReadDiscount',
+      'fxMode',
+      'manualRate',
+      'openRouterEnabled',
+      'overrides',
+    ])
+    // Deployment config stays hand-edited in the profile patch.
+    for (const key of ['apiKeyEnv', 'baseURL', 'refreshMs', 'trustedHosts', 'snapshotHistoryLimit']) {
+      expect(schema.dict[key]?.meta?.volatile).not.toBe(true)
+    }
+  })
+
   it('registers the projections and the trust-fenced route', async () => {
     const harness = makeContext()
     await apply(harness.ctx, { pricingRefreshHours: 1 })

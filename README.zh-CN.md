@@ -9,7 +9,7 @@
 **DSH Cost Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。
 
 - Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影与不读价格簿的 `sessionCostIndex` 消息索引、子代理成本聚合，以及带信任围栏的 `/cost-meter` 路由。
-- Client 半区（`src/client/`）：输入框下方读数、花费标签页、每条回复成本小标签、头部胶囊，以及插件配置卡——内置简体中文与英文。
+- Client 半区（`src/client/`）：输入框下方读数、花费标签页、每条回复成本小标签、头部胶囊，以及插件配置页（设置 → 插件）——内置简体中文与英文。
 
 ---
 
@@ -29,7 +29,7 @@ npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 npx @deepseek-ai/dsh web
 ```
 
-如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。插件声明并已验证兼容 DSH `^0.1.5-alpha.1`。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
+如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。插件声明并已验证兼容 DSH `^0.1.7-rc.2`。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 概述
 
@@ -49,7 +49,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 | 账户余额 | 官方 `GET /user/balance`，缓存 60 秒，单飞请求，路由带信任围栏 |
 | 子代理支持 | 沿 `subagents.listDescendants` 枚举本会话持久子代理树（子代理再派生的孙代理、已结束或已冷启动的子会话都计入，无层数上限）；账本优先取常驻会话的投影，未常驻的经 `sessionQuery.readSession` + `sessionProjections.restore` 从其持久日志冷读——因此主机重启后，旧会话的历史子代理花费同样会被补算；未挂载该服务时回退到活跃代理树 BFS |
 | 对话总花费 | 主会话 + 全部后代子代理（任意层数）；主会话自身账本尚未就绪时仍展示子代理合计 |
-| UI 表面 | 输入框读数 · 花费标签页 · 回复小标签 · 头部胶囊（实时估算）· 设置卡 |
+| UI 表面 | 输入框读数 · 花费标签页 · 回复小标签 · 头部胶囊（实时估算）· 插件配置页 |
 | 本地化 | 简体中文（键源）+ 英文 |
 | 复杂度 | 全同步折叠；经内存镜像 O(1) 查价 |
 
@@ -63,7 +63,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 | 花费标签页 | `conversation.view` | 全对话总花费（主会话 + 任意层级的子代理）、分类小计、带层级的子代理列表与逐回复锚定账本 |
 | 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，做成与官方「用量」「用时」完全同形的统计胶囊（28px 药丸、悬停底色、`aria-expanded` 展开锚定在触发件上方的对话框）；位置收在统计串末：在「用量」「用时」之后、末尾时刻文本之前，间距沿用行自身的 gap；按计价档位着色（闲时绿、高峰红）；对话框列出三类计费、档位与倍率、模型与快照版本；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标（无价格时显示 `—`） |
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
-| 插件配置卡 | `settings.plugin.item` | 按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新 |
+| 插件配置页 | `plugins.row.config` | 设置 → 插件 中 cost-meter 行自己的配置页（DSH 0.1.7 以 `<包名>#<行 id>` 为键托管插件自带配置）：按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新。可编辑字段即 schema 中标记 `volatile()` 的字段——部署类字段（端点、凭据引用、刷新周期、可信主机、历史上限）仍在 profile patch 中手工维护，这正是 DSH 配置投影能够写入的边界 |
 
 `/cost-meter` 宿主路由通过 GET 提供余额快照、价格簿视图与子代理合计；通过 POST（`{"action":"refresh"}`）执行手动刷新。与 `/api` 围栏一致，路由只应答 `Host` 头为回环地址或已声明可信主机的请求——这是防 DNS 重绑定的安全校验。
 

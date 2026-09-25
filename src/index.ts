@@ -16,7 +16,7 @@
  * @module @gamegeek-saikel/dsh-cost-meter
  */
 
-import type { Context } from '@deepseek-ai/cordis'
+import type { Context, Volatile } from '@deepseek-ai/cordis'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-host-webserver'
@@ -92,21 +92,21 @@ export interface Config {
   /** OpenRouter models directory; defaults to openrouter.ai. */
   openRouterModelsUrl?: string
   /** Whether OpenRouter is allowed as a fallback price source; defaults to true. */
-  openRouterEnabled?: boolean
+  openRouterEnabled?: Volatile<boolean>
   /** Cap on the persisted snapshot history; defaults to 50. */
   snapshotHistoryLimit?: number
-  /** Manual per-model price overrides (the settings section also edits these). */
-  overrides?: Record<string, ModelPrice>
-  /** OpenRouter model-id → canonical key aliases (the settings section also edits these). */
-  aliases?: Record<string, string>
+  /** Manual per-model price overrides (the settings page also edits these). */
+  overrides?: Volatile<Record<string, ModelPrice>>
+  /** OpenRouter model-id → canonical key aliases (the settings page also edits these). */
+  aliases?: Volatile<Record<string, string>>
   /** Cache-read price as a fraction of the uncached input price (OpenRouter only). */
-  cacheReadDiscount?: number
+  cacheReadDiscount?: Volatile<number>
   /** Exchange-rate mode: auto-fetch or a manually pinned rate. */
-  fxMode?: 'auto' | 'manual'
+  fxMode?: Volatile<'auto' | 'manual'>
   /** Manually pinned USD→CNY rate (used in manual mode, auto-mode fallback). */
-  manualRate?: number
+  manualRate?: Volatile<number>
   /** Whether the balance readout is shown in the UI. */
-  balanceEnabled?: boolean
+  balanceEnabled?: Volatile<boolean>
 }
 
 const modelPriceSchema = z.object({
@@ -127,6 +127,39 @@ const modelPriceSchema = z.object({
   }),
 })
 
+/**
+ * The user-editable half of the configuration, as its own plain schema so the
+ * `Config` below can expose each field through a volatile reference without
+ * restating defaults. Every one of these is written through the Plugins page.
+ */
+const SettingsFields = {
+  overrides: z.dict(modelPriceSchema, z.string()).default({}),
+  aliases: z.dict(z.string(), z.string()).default({ ...DEFAULT_ALIASES }),
+  cacheReadDiscount: z.number().min(0).max(1).default(DEFAULT_CACHE_READ_DISCOUNT),
+  fxMode: z.union(['auto', 'manual']).default('auto'),
+  manualRate: z.number().min(0.001).default(DEFAULT_FX_RATE),
+  balanceEnabled: z.boolean().default(true),
+  openRouterEnabled: z.boolean().default(true),
+}
+
+/**
+ * Plugin configuration schema.
+ *
+ * DSH 0.1.7 derives the page a plugin exposes from this schema alone: a field
+ * is editable only beneath a `volatile()` node (the nearest volatile ancestor
+ * decides, so the mode splits cleanly into deployment config edited in the
+ * profile patch and the live preferences the Plugins page writes). The
+ * deployment fields below therefore stay plain, and the resolved values a
+ * volatile field yields are stable `Volatile` references — `apply` reads them
+ * with `.get()`.
+ *
+ * Schemastery 3.18.4 types an object schema's input as its all-optional
+ * ObjectS and its output as the all-required ObjectT, so the schema value is
+ * no longer *comparable* to `z<Config>` (whose fields are all optional: they
+ * are the yaml-input shape, not the resolved output). The double assertion
+ * states that deliberate narrowing — the schema is the source of truth, and
+ * the Loader hands `apply` the resolved object.
+ */
 export const Config = z.object({
   apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
   baseURL: z.string().default(PUBLIC_BASE_URL),
@@ -136,15 +169,15 @@ export const Config = z.object({
   fxApiUrl: z.string().default(FX_API_URL),
   defaultFxRate: z.number().min(0.001).default(DEFAULT_FX_RATE),
   openRouterModelsUrl: z.string().default(OPENROUTER_MODELS_URL),
-  openRouterEnabled: z.boolean().default(true),
   snapshotHistoryLimit: z.natural().min(1).default(DEFAULT_SNAPSHOT_HISTORY_LIMIT),
-  overrides: z.dict(modelPriceSchema, z.string()).default({}),
-  aliases: z.dict(z.string(), z.string()).default({ ...DEFAULT_ALIASES }),
-  cacheReadDiscount: z.number().min(0).max(1).default(DEFAULT_CACHE_READ_DISCOUNT),
-  fxMode: z.union(['auto', 'manual']).default('auto'),
-  manualRate: z.number().min(0.001).default(DEFAULT_FX_RATE),
-  balanceEnabled: z.boolean().default(true),
-}) as z<Config>
+  overrides: SettingsFields.overrides.volatile(),
+  aliases: SettingsFields.aliases.volatile(),
+  cacheReadDiscount: SettingsFields.cacheReadDiscount.volatile(),
+  fxMode: SettingsFields.fxMode.volatile(),
+  manualRate: SettingsFields.manualRate.volatile(),
+  balanceEnabled: SettingsFields.balanceEnabled.volatile(),
+  openRouterEnabled: SettingsFields.openRouterEnabled.volatile(),
+}) as unknown as z<Config>
 
 /** Resolved plugin facts after schema defaults. */
 export interface ResolvedConfig {
@@ -313,7 +346,10 @@ interface SettingsAction {
   action: 'refresh'
 }
 
-/** The `cost-meter` settings namespace (plugin configuration page). */
+/**
+ * The settings namespace this plugin owns: the Loader entry id, which is also
+ * the `ns` the configuration projection reports for this instance.
+ */
 export const SETTINGS_NAMESPACE = 'cost-meter' as SettingsNamespace
 
 /**
@@ -338,7 +374,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     fxApiUrl: config?.fxApiUrl ?? FX_API_URL,
     defaultFxRate: config?.defaultFxRate ?? DEFAULT_FX_RATE,
     openRouterModelsUrl: config?.openRouterModelsUrl ?? OPENROUTER_MODELS_URL,
-    openRouterEnabled: config?.openRouterEnabled ?? true,
+    openRouterEnabled: config?.openRouterEnabled?.get() ?? true,
     snapshotHistoryLimit: config?.snapshotHistoryLimit ?? DEFAULT_SNAPSHOT_HISTORY_LIMIT,
   }
   const pricebookConfig: PricebookResolvedConfig = {
@@ -359,21 +395,32 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     void pricebookUsd.close()
   }, 'cost-meter: pricebook domains')
 
-  // ── Plugin configuration section: the settings page renders the standard
-  //  card; every resolved change is applied to both pricebooks and re-anchors.
-  //  DSH 0.1.5 exposes namespace validation and registration directly on the
-  //  settings service; the old settingsNamespace/installSettingsSection
-  //  helpers are no longer part of that public runtime surface.
+  // ── Plugin configuration. DSH 0.1.7 projects each Loader entry's own Config
+  //  schema into the Plugins page and persists edits through the profile patch,
+  //  so a change re-applies this entry with the new config: there is no
+  //  settings namespace to register, and no watch to keep. The volatile fields
+  //  still have to reach the pricebooks, so the initial config is read once
+  //  here (through the stable references the schema yields); every later change
+  //  arrives as a fresh apply().
   const applySettings = (settings: Config): void => {
-    pricebookCny.applySettings(settings)
-    pricebookUsd.applySettings(settings)
+    const editable = {
+      overrides: settings.overrides?.get(),
+      aliases: settings.aliases?.get(),
+      cacheReadDiscount: settings.cacheReadDiscount?.get(),
+      fxMode: settings.fxMode?.get(),
+      manualRate: settings.manualRate?.get(),
+      balanceEnabled: settings.balanceEnabled?.get(),
+      openRouterEnabled: settings.openRouterEnabled?.get(),
+    }
+    pricebookCny.applySettings(editable)
+    pricebookUsd.applySettings(editable)
   }
+  applySettings(config ?? {})
+  // This plugin ships its own configuration page (CostPluginCard registers the
+  // row's `plugins.row.config`), so it opts out of the generated schema form to
+  // keep the Plugins page from offering the same fields twice.
   ctx.inject(['settings'], (settingsCtx) => {
-    const scope = settingsCtx.settings.register(SETTINGS_NAMESPACE, Config, {
-      base: (config ?? {}) as Config,
-    })
-    applySettings(scope.get())
-    scope.watch((next) => applySettings(next))
+    settingsCtx.effect(() => settingsCtx.settings.configure({ auto: false }, ctx.fiber))
   })
 
   // ── sessionCost projections: anchored per-step ledgers for CNY and USD,

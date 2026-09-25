@@ -29,7 +29,7 @@ Then start the harness:
 npx @deepseek-ai/dsh web
 ```
 
-If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `^0.1.5-alpha.1`. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `^0.1.7-rc.2`. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Overview
 
@@ -49,7 +49,7 @@ Chat costs in DeepSeek pricing change over time (list prices, USD→CNY exchange
 | Account balance | Official `GET /user/balance`, cached 60 s, single in-flight request, trust-fenced route |
 | Subagent support | Enumerates the conversation's durable subagent tree through `subagents.listDescendants` (nested delegations, settled children, and cold subagent sessions included, with no depth cap); a ledger is read from the resident session's projection when available and otherwise cold-restored from the child's stored log (`sessionQuery.readSession` + `sessionProjections.restore`), so historical subagent spend is also counted after a host restart; falls back to a BFS over the live agent tree when neither service is mounted |
 | Conversation total | Main session + every descendant subagent (any depth); subagent totals still render while the main session's own ledger is not materialized |
-| UI surfaces | Composer dock · Cost tab · per-reply chip · header pill (live estimate) · settings card |
+| UI surfaces | Composer dock · Cost tab · per-reply chip · header pill (live estimate) · plugin configuration page |
 | Locale | Simplified Chinese (source) + English |
 | Complexity | Fully synchronous fold; O(1) price lookups via in-memory mirror |
 
@@ -63,7 +63,7 @@ Once installed, the plugin contributes five browser surfaces (all text shown in 
 | Cost view tab | `conversation.view` | Whole-conversation totals (main + every subagent nesting level), category totals, the per-subagent list with its depth, and the per-reply anchored ledger |
 | Per-reply cost chip | `conversation.chat.assistant-actions` | The anchored cost of one finalized reply as the row's own stat capsule — the same trigger + anchored dialog the shipped 用量 and 用时 capsules use (28px pill, hover fill, `aria-expanded` dialog above the trigger). It closes the row's stat run: after 用量 and 用时, before the timestamp, spaced by the row's own gap, and coloured by the band that priced it (green off-peak, red peak). The dialog lists the three billed categories, the band with its multiplier, the model, and the snapshot version; the slot hands over the message id, which the `sessionCostIndex` projection resolves to ledger coordinates (dash `—` when unpriced) |
 | Header pill | `conversation.session.header.utilities` | Anchored total, or a live `≈ ¥x.xx (estimate)` while streaming; click for the detail panel |
-| Plugin card | `settings.plugin.item` | Per-model overrides, OpenRouter aliases, cache-read discount, FX mode, toggles, and manual refresh |
+| Plugin configuration page | `plugins.row.config` | The cost-meter row's page under 设置 → 插件 (DSH 0.1.7 hosts a plugin's own configuration there, keyed `<package>#<row id>`): per-model overrides, OpenRouter aliases, cache-read discount, FX mode, toggles, and manual refresh. The editable fields are the schema's `volatile()` ones — the deployment fields (endpoint, credential reference, refresh cadence, trusted hosts, history cap) stay hand-edited in the profile patch, which is exactly the split DSH's configuration projection can write |
 
 The `/cost-meter` host route serves the balance snapshot, the pricebook view, and the subagent totals over GET, and applies manual refresh over POST (`{"action":"refresh"}`). Like the `/api` fence, the route only answers requests whose `Host` header names a loopback address or a declared trusted host — the DNS-rebinding-safe check.
 

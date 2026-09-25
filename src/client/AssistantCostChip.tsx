@@ -24,7 +24,7 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  IconGaugeOutline16,
+  IconGaugeOutlineRegular,
   useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -148,7 +148,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
         aria-expanded={open}
         onClick={() => setOpen(prev => !prev)}
       >
-        <IconGaugeOutline16 />
+        <IconGaugeOutlineRegular />
         <span className={css.label}>{amount}</span>
       </button>
       {open && createPortal(
@@ -161,7 +161,7 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
           data-testid="cost-chip-detail"
         >
           <div className={css.title}>
-            <span className={css.titleLabel}><IconGaugeOutline16 />{t('chip.detail.title')}</span>
+            <span className={css.titleLabel}><IconGaugeOutlineRegular />{t('chip.detail.title')}</span>
             <span className={css.titleValue}>{amount}</span>
           </div>
           <div className={css.titleRule} aria-hidden />

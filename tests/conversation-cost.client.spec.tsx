@@ -23,8 +23,8 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => {
       React.createElement('span', { className: props.className }, props.children),
     useAnchoredPosition: () => ({ left: 0, top: 0 }),
     useDismissOnOutsidePointer: () => { /* outside clicks are covered by the pill's own tests */ },
-    IconChevronDownOutline14: passthrough,
-    IconGaugeOutline16: passthrough,
+    IconGaugeOutlineRegular: passthrough,
+    IconDatabaseOutlineRegular: passthrough,
   }
 })
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -131,6 +131,19 @@ function zhT(key: string, params?: Record<string, string>): string {
     'balance.failed': '余额不可用',
     'balance.detail': '余额 {amount}（赠送 {granted} · 充值 {toppedUp}）',
     'balance.suspended': '账户已暂停付费请求',
+    'dock.detail.title': '本会话花费',
+    'dock.row.session': '本会话',
+    'dock.row.subagent': '子代理（含下级）',
+    'dock.row.own': '本会话自身',
+    'dock.row.uncached': '输入（缓存未命中）',
+    'dock.row.cacheRead': '输入（缓存命中）',
+    'dock.row.output': '输出',
+    'dock.row.balance': '账户余额',
+    'dock.row.model': '模型',
+    'dock.row.snapshot': '价格快照',
+    'dock.row.source': '价格来源',
+    'dock.row.updated': '更新时间',
+    'dock.row.unpriced': '无价格步数',
     'view.empty': '暂无花费数据',
     'view.total': '总花费',
     'view.uncached': '输入（缓存未命中）',
@@ -189,6 +202,10 @@ function zhT(key: string, params?: Record<string, string>): string {
     'settings.save': '保存',
     'settings.discard': '丢弃',
     'settings.saved': '已保存',
+    'settings.summary': '快照锚定的会话花费与价格表',
+    'settings.rejected': '主机拒绝了这次修改',
+    'settings.unavailable': '此部署未向本页提供可编辑的配置',
+    'settings.overridden': '已自定义',
     'settings.error': '操作失败：{error}',
     'settings.jsonHint': 'JSON 对象，键为模型，值含 single/offPeak/peak 价格桶',
   }
@@ -298,7 +315,13 @@ describe('stepsOfTurn / stepOf', () => {
 })
 
 describe('SessionCostLine', () => {
-  it('renders the three cost breakdowns, the total, and the balance on one strip', async () => {
+  /** The capsule's label text. The `·` separator's spacing comes from CSS
+   * margins, so the reader re-spaces it to keep the expectations readable. */
+  const pillText = (): string =>
+    (screen.getByTestId('session-cost-line').querySelector('[data-cost-pill="total"]')?.textContent ?? '')
+      .replace(/·/g, ' · ')
+
+  it('renders the whole conversation total and the balance as one capsule', async () => {
     stubFetch(RESPONSE)
     const useProjection = () => PROJECTION as never
     render(<SessionCostLine
@@ -306,30 +329,65 @@ describe('SessionCostLine', () => {
       sessionId={"s1" as never}
       t={zhT}
     />)
-    await screen.findByText('缓存输入 ¥0.0200 · 非缓存输入 ¥1.00 · 输出 ¥2.00 · 本会话 ¥3.02 · 余额 ¥110.00')
+    await screen.findByText(/余额 ¥110.00/)
+    // One capsule holding the WHOLE conversation's spend (the root ledger plus
+    // every subagent level) and the balance; the panel carries the breakdown.
+    expect(screen.getByTestId('session-cost-line').querySelectorAll('[data-cost-pill]').length).toBe(1)
+    expect(pillText()).toBe('本会话 ¥3.02 · 余额 ¥110.00')
+    expect(screen.getByTestId('session-cost-line').hasAttribute('data-composer-cost')).toBe(true)
   })
 
-  it('combines subagent costs into the breakdowns and shows the subagent total', async () => {
+  it('opens the shipped stat-dialog panel with the labelled rows on click', async () => {
+    stubFetch(RESPONSE)
+    render(<SessionCostLine
+      useProjection={() => PROJECTION as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    const trigger = await screen.findByRole('button', { name: '本会话花费' })
+    expect(trigger.getAttribute('aria-haspopup')).toBe('dialog')
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    const panel = await screen.findByRole('dialog', { name: '本会话花费' })
+    const rows = Array.from(panel.querySelectorAll('dl dt')).map((node) => node.textContent)
+    expect(rows).toEqual(['本会话', '输入（缓存未命中）', '输入（缓存命中）', '输出', '账户余额', '模型', '价格快照', '价格来源', '更新时间'])
+    expect(panel.querySelector('dl dd')?.textContent).toBe('¥3.02')
+    expect(panel.textContent).toContain('¥0.0200')
+  })
+
+  it('carries the whole conversation total into the capsule and splits it in the panel', async () => {
     stubFetch({ ...RESPONSE, subagents: [SUBAGENT] })
     render(<SessionCostLine
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
     />)
-    // Combined: uncached 1.2 → 1.20 · cacheRead 0.12 → 0.1200 · output 2.4 → 2.40.
-    await screen.findByText('缓存输入 ¥0.1200 · 非缓存输入 ¥1.20 · 输出 ¥2.40 · 本会话 ¥3.02 · 子代理 ¥0.7000 · 余额 ¥110.00')
+    // 本会话 is the WHOLE conversation: main 3.02 + child 0.70 = 3.72.
+    await screen.findByText(/本会话 ¥3.72/)
+    expect(pillText()).toBe('本会话 ¥3.72 · 余额 ¥110.00')
+    fireEvent.click(screen.getByRole('button', { name: '本会话花费' }))
+    const panel = await screen.findByRole('dialog', { name: '本会话花费' })
+    const dds = Array.from(panel.querySelectorAll('dl dd')).map((node) => node.textContent)
+    // 本会话 · 子代理（含下级） · 本会话自身 · 三档计费 · 账户余额 · …
+    expect(dds.slice(0, 3)).toEqual(['¥3.72', '¥0.7000', '¥3.02'])
   })
 
-  it('sums nested subagent rows into the same strip, at every depth', async () => {
+  it('sums nested subagent rows into the whole-conversation total, at every depth', async () => {
     stubFetch({ ...RESPONSE, subagents: [SUBAGENT, NESTED_SUBAGENT] })
     render(<SessionCostLine
       useProjection={() => PROJECTION as never}
       sessionId={"s1" as never}
       t={zhT}
     />)
-    // Combined = main 3.02 + direct child 0.70 + grandchild 0.50 = 4.22;
-    // uncached 1 + 0.2 + 0.3 = 1.50, output 2 + 0.4 + 0.2 = 2.60.
-    await screen.findByText('缓存输入 ¥0.1200 · 非缓存输入 ¥1.50 · 输出 ¥2.60 · 本会话 ¥3.02 · 子代理 ¥1.20 · 余额 ¥110.00')
+    // Main 3.02 + direct child 0.70 + grandchild 0.50 = 4.22; the delegated share
+    // is 1.20 and the session's own share stays 3.02.
+    await screen.findByText(/本会话 ¥4.22/)
+    expect(pillText()).toBe('本会话 ¥4.22 · 余额 ¥110.00')
+    fireEvent.click(screen.getByRole('button', { name: '本会话花费' }))
+    const panel = await screen.findByRole('dialog', { name: '本会话花费' })
+    const dds = Array.from(panel.querySelectorAll('dl dd')).map((node) => node.textContent)
+    expect(dds.slice(0, 3)).toEqual(['¥4.22', '¥1.20', '¥3.02'])
   })
 
   it('still totals subagents when the main ledger is not materialized', async () => {
@@ -339,7 +397,13 @@ describe('SessionCostLine', () => {
       sessionId={"s1" as never}
       t={zhT}
     />)
-    await screen.findByText('缓存输入 ¥0.1000 · 非缓存输入 ¥0.5000 · 输出 ¥0.6000 · 本会话 ¥0.00 · 子代理 ¥1.20')
+    await screen.findByText(/本会话 ¥1.20/)
+    expect(pillText()).toBe('本会话 ¥1.20')
+    fireEvent.click(screen.getByRole('button', { name: '本会话花费' }))
+    const panel = await screen.findByRole('dialog', { name: '本会话花费' })
+    const dds = Array.from(panel.querySelectorAll('dl dd')).map((node) => node.textContent)
+    // The whole total is delegated, so the session's own share is zero.
+    expect(dds.slice(0, 3)).toEqual(['¥1.20', '¥1.20', '¥0.00'])
   })
 
   it('hides the balance when the pricebook toggle disables it', async () => {
@@ -364,7 +428,7 @@ describe('SessionCostLine', () => {
       sessionId={"s1" as never}
       t={zhT}
     />)
-    await screen.findByText('本会话 ¥0.00')
+    await screen.findByText(/本会话 ¥0.00/)
   })
 
   it('keeps the row visible on a fresh session with zero spend (session switch)', async () => {
@@ -378,7 +442,7 @@ describe('SessionCostLine', () => {
       sessionId={"fresh-session" as never}
       t={zhT}
     />)
-    await screen.findByText('本会话 ¥0.00')
+    await screen.findByText(/本会话 ¥0.00/)
   })
 
   it('shows a balance-failed marker when the host route errors', async () => {
@@ -812,24 +876,25 @@ describe('CostView', () => {
 })
 
 describe('CostPluginCard', () => {
-  /** A fake settings scope over one accepted section (stable snapshots). */
-  function makeScope(value: unknown) {
-    const listeners = new Set<() => void>()
-    let snapshot = { status: 'ready' as const, value, base: {}, user: undefined, revision: 1, writable: true, mode: 'host' as const }
+  /** A fake configuration-page form over one accepted section (stable snapshots). */
+  function makeForm(value: unknown) {
     return {
-      getSnapshot: () => snapshot,
-      subscribe: (listener: () => void) => {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      },
-      set: vi.fn(async () => { /* noop */ }),
-      unset: vi.fn(async () => { /* noop */ }),
+      state: { status: 'ready' as const, value, base: {}, user: undefined, revision: 7, writable: true, mode: 'host' as const },
+      mutate: vi.fn(async () => true),
     }
   }
 
-  it('renders the standard plugin card and writes staged edits through the scope', () => {
+  it("renders the row's one-liner without fetching the pricebook route", () => {
+    const fetchSpy = vi.fn()
+    vi.stubGlobal('fetch', fetchSpy)
+    render(<CostPluginCard view="summary" t={zhT} />)
+    expect(screen.getByText('快照锚定的会话花费与价格表')).not.toBeNull()
+    expect(fetchSpy).not.toHaveBeenCalled()
+  })
+
+  it('renders the configuration page and writes staged edits through the form', async () => {
     stubFetch(RESPONSE)
-    const scope = makeScope({
+    const form = makeForm({
       overrides: {},
       aliases: { 'deepseek/deepseek-chat': 'deepseek-v4-flash' },
       cacheReadDiscount: 0.25,
@@ -838,21 +903,38 @@ describe('CostPluginCard', () => {
       balanceEnabled: true,
       openRouterEnabled: true,
     })
-    render(<CostPluginCard scope={scope as never} t={zhT} />)
-    // Header names the plugin; no version numbers anywhere.
-    expect(screen.getByTestId('cost-plugin-card').textContent).toContain('花费计价')
+    render(<CostPluginCard view="page" form={form as never} t={zhT} />)
+    // The page owner draws the title; the body carries the fields and no version numbers.
     expect(screen.getByTestId('cost-plugin-card').textContent).not.toContain('v1')
-    fireEvent.click(screen.getByText('花费计价'))
     expect(screen.getByText('缓存折扣系数（OpenRouter）')).not.toBeNull()
     expect(screen.getByText('OpenRouter 别名映射')).not.toBeNull()
-    // Save writes every staged field through the scope.
+    // Save submits every staged field as one revision-fenced batch.
+    await waitFor(() => expect(screen.getByText('保存')).not.toBeNull())
     fireEvent.click(screen.getByText('保存'))
-    expect(scope.set).toHaveBeenCalledWith('overrides', {})
-    expect(scope.set).toHaveBeenCalledWith('aliases', { 'deepseek/deepseek-chat': 'deepseek-v4-flash' })
-    expect(scope.set).toHaveBeenCalledWith('cacheReadDiscount', 0.25)
-    expect(scope.set).toHaveBeenCalledWith('fxMode', 'auto')
-    expect(scope.set).toHaveBeenCalledWith('manualRate', 7.2)
-    expect(scope.set).toHaveBeenCalledWith('balanceEnabled', true)
-    expect(scope.set).toHaveBeenCalledWith('openRouterEnabled', true)
+    await waitFor(() => expect(form.mutate).toHaveBeenCalledTimes(1))
+    expect(form.mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['overrides'], value: {} },
+      { op: 'set', path: ['aliases'], value: { 'deepseek/deepseek-chat': 'deepseek-v4-flash' } },
+      { op: 'set', path: ['fxMode'], value: 'auto' },
+      { op: 'set', path: ['balanceEnabled'], value: true },
+      { op: 'set', path: ['openRouterEnabled'], value: true },
+      { op: 'set', path: ['cacheReadDiscount'], value: 0.25 },
+      { op: 'set', path: ['manualRate'], value: 7.2 },
+    ], 7)
+  })
+
+  it('reports a Host refusal instead of claiming a save', async () => {
+    stubFetch(RESPONSE)
+    const form = makeForm({ fxMode: 'auto' })
+    form.mutate = vi.fn(async () => false)
+    render(<CostPluginCard view="page" form={form as never} t={zhT} />)
+    await waitFor(() => expect(screen.getByText('保存')).not.toBeNull())
+    fireEvent.click(screen.getByText('保存'))
+    await screen.findByText('操作失败：主机拒绝了这次修改')
+  })
+
+  it('states that nothing is editable when the page supplies no form', () => {
+    render(<CostPluginCard view="page" t={zhT} />)
+    expect(screen.getByTestId('cost-plugin-card').textContent).toContain('未向本页提供可编辑的配置')
   })
 })

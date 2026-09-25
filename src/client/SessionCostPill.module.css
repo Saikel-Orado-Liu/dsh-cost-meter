@@ -1,11 +1,12 @@
 /* Header utility pill: anchored total / live estimate + expandable detail.
-   Geometry mirrors the shipped controls that share the
-   `conversation.session.header.utilities` row — the open-in-app split capsule
-   is 28px tall with a 14px radius, a 0.5px border-l4 hairline, 11px/16px type
-   and 5px gaps — so the pill reads as one of the row's controls instead of
-   standing a size apart. The detail panel rides the product overlay surface
-   (--dsw-specific-menu) and dismisses on outside clicks or Escape, like the
-   other header controls. */
+   Geometry mirrors the controls that share the
+   `conversation.session.header.utilities` row in DSH 0.1.7 — the shipped
+   open-in-app split capsule is 24px tall with `--dsw-radius-sm` (8px), a 0.5px
+   border-l4 hairline, 11px/16px type, 4px gaps and 3px/5px padding — so the
+   pill reads as one of the row's controls instead of standing a size apart.
+   (0.1.5 used a 28px/14px control here; 0.1.7 has no such size.) The detail
+   panel rides the product overlay surface (--dsw-specific-menu) and dismisses
+   on outside clicks or Escape, like the other header controls. */
 
 .wrap {
   position: relative;
@@ -16,11 +17,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  height: 28px;
-  padding: 5px 7px;
+  gap: 4px;
+  height: 24px;
+  padding: 3px 5px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 14px;
+  border-radius: var(--dsw-radius-sm);
   background: 0 0;
   color: var(--dsw-alias-label-primary);
   font-family: var(--dsw-font-family);
@@ -70,16 +71,22 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 100;
+  box-sizing: border-box;
   min-width: 250px;
   max-width: 340px;
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 12px;
+  /* The shipped menu surface carries the same glass treatment as the product's
+     stat-dialog: a translucent fill plus its backdrop filter, the elevation
+     stroke/shadow pair, and the radius that goes with them. */
   background: var(--dsw-specific-menu);
-  box-shadow: var(--dsw-shadow-lv3);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-primary);

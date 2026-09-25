@@ -801,11 +801,12 @@ export class PricebookHandle {
   }
 
   /**
-   * Apply a resolved plugin-settings snapshot (the `cost-meter`
-   * settings namespace) to the pricebook: the editable configuration fields
-   * overwrite the persisted state and the resolved table re-anchors (a new
-   * snapshot starts when anything user-visible changed). Never throws.
-   * @param settings - the settings-section value (may carry only a subset).
+   * Apply the plugin's live configuration (the volatile fields of the
+   * `cost-meter` Config schema, as the configuration page writes them) to the
+   * pricebook: those fields overwrite the persisted state and the resolved
+   * table re-anchors (a new snapshot starts when anything user-visible
+   * changed). Never throws.
+   * @param settings - the resolved editable configuration (may carry only a subset).
    */
   applySettings(settings: Partial<{
     overrides: Record<string, ModelPrice> | undefined

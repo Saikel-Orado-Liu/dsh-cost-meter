@@ -1,58 +1,83 @@
 /* Per-reply cost capsule inside the completed Turn's action row.
-   The row is the product's own flex strip (copy · branch · 用量 · 用时 ·
-   timestamp, `align-items: center`, `gap: 8px`, 28px tall). The price closes
-   the row's stat run — after 用量 and 用时, before the timestamp — which the
-   flex `order` properties below express: the slot hands the capsule a DOM seat
-   in the action area (after copy, before the branch button), and it is ordered
-   past the row's default-ordered children while the product's own timestamp
-   keeps the last seat it already occupied.
+   The row is the product's own flex strip (`MessageIconActions`: height 28px,
+   `align-items: center`, `gap: 8px`). Its DOM order is
+   `copy · <slot entries> · branch · <endInfo>[用量 · timestamp]`, so the slot's
+   seat cannot reach the place the price belongs: between the shipped 用量
+   capsule and the timestamp. The control metrics below therefore copy the row's
+   own stat control (`TurnUsagePanel`, the 用量 capsule) token for token — 28px
+   tall, `--dsw-radius-sm`, `6px 8px`, 4px icon gap, 15px glyph, tertiary label,
+   tabular numerals — so the price reads as one more stat of the row rather than
+   a different kind of chip.
 
-   The trigger and the dialog copy the shipped stat-capsule control
-   (TurnUsagePanel / TurnTimePanel) token for token, so the price reads as one
-   more stat of the row rather than a different kind of chip. Only the label
-   colour deviates: the band that priced the reply paints it (green off-peak,
-   red peak), which is why that rule states the label's own colour — an
-   explicit child colour outranks the trigger's inherited hover colour. The
-   row's own `data-actions-reveal` contract still hides the capsule until the
-   turn is hovered; nothing here needs a reveal rule of its own. */
+   The seat itself is expressed by flattening the trailing group
+   (`display: contents`), which promotes its children to flex items of the row
+   and lets all three be ordered individually: 用量 (2) · 价格 (3) · 时间 (4),
+   after the row's own buttons (0). The group's 8px lead-in margin moves onto the
+   first stat it held, so the gap between the buttons and the stat run survives
+   the flattening. The shipped classes are addressed through the CSS-module
+   naming convention (`<hash>_<localName>`): should that convention, the group,
+   or its child order change, these selectors stop matching and the price simply
+   keeps its plain DOM seat — a layout difference, never a break.
+
+   Only the label colour deviates from the shipped control: the band that priced
+   the reply paints it (green off-peak, red peak), which is why that rule states
+   the label's own colour — an explicit child colour outranks the trigger's
+   inherited hover colour. The row's own `data-actions-reveal` contract still
+   hides the capsule until the turn is hovered; nothing here needs a reveal rule
+   of its own. */
 
 .root {
-  order: 1;
+  order: 3;
   min-width: 0;
   display: inline-flex;
 }
 
-/* The row's timestamp belongs to the product's MessageIconActions module, so it
-   is addressed through the CSS-module naming convention (`<hash>_<localName>`)
-   rather than a class of ours; the rule only pins the seat it already holds.
-   Should that convention ever change, the selector stops matching and the price
-   simply drops back to the row's end — a layout difference, never a break. */
-[class*='_actions'] > [class*='_timeEnd'] {
+[class*='_actions'] > [class*='_endInfo'] {
+  display: contents;
+}
+
+[class*='_actions'] > [class*='_endInfo'] > *:first-child {
   order: 2;
+  margin-left: 8px;
+}
+
+[class*='_actions'] > [class*='_endInfo'] > *:last-child {
+  order: 4;
+}
+
+/* 0.1.5 exposed the timestamp as a direct child of the action row instead of a
+   trailing group; pin it too so the price keeps the same seat on that shape. */
+[class*='_actions'] > [class*='_timeEnd'] {
+  order: 4;
 }
 
 .trigger {
   min-width: 0;
   height: calc(28px + var(--dsh-content-font-delta, 0px));
   color: var(--dsw-alias-label-tertiary);
-  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
   font-variant-numeric: tabular-nums;
   line-height: calc(24px + var(--dsh-content-font-delta, 0px));
   white-space: nowrap;
   cursor: pointer;
   background: 0 0;
   border: none;
-  border-radius: 28px;
+  /* The row's own stat control (`TurnUsagePanel`) carries `--dsw-radius-sm` on a
+     28px-tall trigger; matching that radius is what makes the price read as one
+     of the row's stats instead of a differently-rounded chip. */
+  border-radius: var(--dsw-radius-sm);
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
   display: inline-flex;
 }
 
+/* The shipped stat control keeps its tertiary label on hover and lets the
+   background alone signal the state; the price follows it. */
 .trigger:hover,
 .trigger[aria-expanded='true'] {
   background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-tertiary);
 }
 
 .trigger svg {
@@ -79,6 +104,11 @@
   z-index: 1100;
   box-sizing: border-box;
   background: var(--dsw-specific-menu);
+  /* The menu surface is a translucent glass colour: without the shipped
+     backdrop filter the panel reads as semi-transparent and the chat shows
+     through. Copied from the product's stat-dialog.module.css, together with
+     the elevation stroke/shadow pair and the radius. */
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   width: max-content;
   min-width: min(300px, 100vw - 24px);
@@ -87,7 +117,7 @@
   color: var(--dsw-alias-label-secondary);
   cursor: default;
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--dsw-radius-lg);
   padding: 16px;
   font-size: 12px;
   line-height: 18px;
@@ -146,7 +176,7 @@
 }
 
 .unpriced {
-  order: 1;
+  order: 3;
   display: inline-flex;
   align-items: center;
   color: var(--dsw-alias-label-tertiary);

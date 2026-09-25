@@ -1,19 +1,156 @@
-/* Session-cost readout row: same posture and color as the shipped stats
-   line it follows (label-tertiary, centered, 12px) so the two dock entries
-   read as one strip. */
+/* Composer-dock cost capsule. The shipped dock readout (`StatsPills` in
+   ui-chat) renders capsules, so this entry adopts exactly that posture and its
+   control metrics: one capsule carrying an icon and a label whose parts are
+   joined by the shipped `·` separator (transparent fill, 999px radius, 1px/8px
+   padding, 6px icon gap, 14px glyph, tertiary label, tabular numerals, hover
+   fill). Clicking it opens the shipped stat-dialog panel shape below.
 
-.root {
-  display: block;
-  text-align: center;
-  max-width: var(--dsh-chat-content-width);
-  width: 100%;
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding: 0 calc(var(--dsh-composer-side-clearance) + 16px) 4px;
-  font-size: 12px;
-  line-height: 20px;
+   The composer dock is a BLOCK container (`InputBar .dock`), so every registered
+   entry would take its own line — the shipped stats strip and this capsule would
+   stack. The container that holds this entry is turned into the centered 12px-gap
+   row the hero composer already uses (`uV2eYG_dock`), which puts the shipped
+   stats capsules, this cost capsule and the context meter on one strip. `:has()`
+   keeps the rule scoped to the one container that actually renders this entry. */
+
+[class*='_dock']:has([data-composer-cost]) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* The anchor carries the shipped row's own type metrics: `StatsPills` sets
+   `calc(--dsh-content-font-size-secondary - 1px)` and the matching line height on
+   its row root, and its capsules inherit them through `font: inherit`. Without
+   them this capsule would take the composer's font size and stand a size apart
+   from the stats capsules it shares the strip with. */
+
+.anchor {
+  min-width: 0;
   color: var(--dsw-alias-label-tertiary);
+  font-size: calc(var(--dsh-content-font-size-secondary, 13px) - 1px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
+  display: inline-flex;
+}
+
+.pill {
+  box-sizing: border-box;
+  corner-shape: round;
+  max-width: 100%;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
   white-space: nowrap;
-  overflow: hidden;
+  background: 0 0;
+  border: none;
+  border-radius: 999px;
+  align-items: center;
+  gap: 6px;
+  padding: 1px 8px;
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.pill:hover,
+.pill[aria-expanded='true'] {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.pill svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.label {
   text-overflow: ellipsis;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.sep {
+  color: var(--dsw-alias-separator-primary);
+  margin: 0 6px;
+}
+
+/* The detail panel is the product's stat-dialog surface, copied from ui-chat's
+   stat-dialog.module.css. The menu colour is a translucent glass, so the
+   backdrop filter is what keeps the panel opaque over the chat; the elevation
+   stroke/shadow pair and the radius belong to that same surface. */
+
+.panel {
+  z-index: 1100;
+  box-sizing: border-box;
+  background: var(--dsw-specific-menu);
+  backdrop-filter: var(--dsw-menu-backdrop-filter);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  width: max-content;
+  min-width: min(300px, 100vw - 24px);
+  max-width: min(440px, 100vw - 24px);
+  box-shadow: var(--dsw-elevation-prominent);
+  color: var(--dsw-alias-label-secondary);
+  cursor: default;
+  border: 0;
+  border-radius: var(--dsw-radius-lg);
+  padding: 16px;
+  font-size: 12px;
+  line-height: 18px;
+  position: fixed;
+}
+
+.title {
+  color: var(--dsw-alias-label-primary);
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  font-weight: 500;
+  display: flex;
+}
+
+.titleLabel {
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  display: inline-flex;
+}
+
+.titleLabel svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+}
+
+.titleValue {
+  font-variant-numeric: tabular-nums;
+}
+
+.titleRule {
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
+  margin-bottom: 10px;
+}
+
+.details {
+  color: var(--dsw-alias-label-tertiary);
+  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  display: grid;
+}
+
+.details dt,
+.details dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.details dd {
+  color: var(--dsw-alias-label-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.details .route {
+  overflow-wrap: anywhere;
 }
