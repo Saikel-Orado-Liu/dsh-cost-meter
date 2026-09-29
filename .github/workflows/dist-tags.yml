@@ -48,5 +48,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      # Kept apart from the reconcile so a credential problem and a policy
+      # problem never look alike in the run summary. npm exchanges the
+      # trusted-publishing token only inside its publish path, so the script
+      # performs that exchange itself before it writes anything.
+      - name: Check the npm credential
+        continue-on-error: true
+        run: node scripts/dist-tag.mjs whoami
+
       - name: Reconcile dist-tags
         run: node scripts/dist-tag.mjs reconcile
