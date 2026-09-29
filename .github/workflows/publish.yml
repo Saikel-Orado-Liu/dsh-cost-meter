@@ -67,7 +67,13 @@ jobs:
           echo "publishing with dist-tag $TAG"
           npm publish --provenance --access public --tag "$TAG"
 
-      # Re-points every tag at the newest published version that supports it, so
-      # a release also repairs a tag an earlier release process set wrong.
+      # Repairs tags an earlier release left wrong by re-pointing each one at the
+      # newest version that supports it. This is deliberately advisory: the
+      # `--tag` above already tagged the version being released, and npm's
+      # trusted-publishing credential carries publish scope only, so it is
+      # refused when it tries to rewrite a tag that already exists. Repairing
+      # needs a write-capable credential (an NPM_TOKEN secret), and
+      # .github/workflows/dist-tags.yml is where that runs strictly.
       - name: Reconcile dist-tags
+        continue-on-error: true
         run: node scripts/dist-tag.mjs reconcile
