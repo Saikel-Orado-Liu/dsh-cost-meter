@@ -107,6 +107,18 @@ pnpm build       # tsc -b && tsdown (lib/ + lib/client.js)
 
 The test suites are fully offline: pricing-page HTML, OpenRouter models, and the FX endpoint are all stubbed. Tests cover the trust fence, balance parsing, the pricebook priority chain and snapshot selection, the immutable ledger fold (including same-step replacement and peak/off-peak band selection at the *event* time), the subagent aggregation (nested and cold children, listing-failure fallback, and a multi-level chain over a real `SessionStore` plus projection registry), and the client surfaces (jsdom).
 
+### Release channels
+
+A `v*` tag push publishes through `.github/workflows/publish.yml`. The tag decides the npm dist-tag, and that choice matters beyond bookkeeping: the community market installs the bare package name — whatever `latest` names — into a visitor's runtime. DSH ships two release lines at once (`@deepseek-ai/dsh` names the current one under `latest` and the upcoming one under `next`), and a plugin version only runs on the line its `@deepseek-ai/dsh*` peer ranges accept, so `scripts/dist-tag.mjs` reads those ranges against the registry's own DSH lines and picks the channel:
+
+| Version | Channel |
+|---|---|
+| accepts the DSH `latest` line | `latest` |
+| accepts only the DSH `next` line | `next` |
+| carries a `-` prerelease suffix | `alpha` |
+
+`node scripts/dist-tag.mjs pairs` prints that table for every published version; `node scripts/dist-tag.mjs reconcile` re-points each tag at the newest version supporting it, which also repairs a tag an earlier release process set wrong (`.github/workflows/dist-tags.yml` runs the same reconcile on demand).
+
 ## Documentation
 
 - [`src/pricing.ts`](src/pricing.ts), [`src/pricebook.ts`](src/pricebook.ts), [`src/session-cost-projection.ts`](src/session-cost-projection.ts), [`src/session-cost-index.ts`](src/session-cost-index.ts) — detailed module docs on parsing, anchoring, and the ledger contract

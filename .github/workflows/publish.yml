@@ -1,5 +1,17 @@
 name: publish.yml
 
+# Publishes the tagged commit and then reconciles npm dist-tags.
+#
+# The dist-tag is not derived from the version string alone: DSH ships two
+# release lines at once (@deepseek-ai/dsh names the current one under `latest`
+# and the upcoming one under `next`), and a plugin version only runs on the
+# line its @deepseek-ai/dsh* peer ranges accept. scripts/dist-tag.mjs reads
+# those ranges, reads the DSH lines from the registry, and picks `latest`,
+# `next`, or `alpha` — the same judgement the runtime gate makes before it
+# loads a bundle. The community market installs the bare package name, i.e.
+# whatever `latest` names, so this choice decides whether a visitor's runtime
+# accepts what the market just installed.
+
 on:
   push:
     tags:
@@ -51,7 +63,11 @@ jobs:
       - name: Publish to npm
         if: steps.check.outputs.skip != 'true'
         run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          TAG=latest
-          case "$PKG_VERSION" in *-*) TAG=alpha ;; esac
+          TAG=$(node scripts/dist-tag.mjs resolve)
+          echo "publishing with dist-tag $TAG"
           npm publish --provenance --access public --tag "$TAG"
+
+      # Re-points every tag at the newest published version that supports it, so
+      # a release also repairs a tag an earlier release process set wrong.
+      - name: Reconcile dist-tags
+        run: node scripts/dist-tag.mjs reconcile

@@ -107,6 +107,18 @@ pnpm build       # tsc -b && tsdown（lib/ + lib/client.js）
 
 测试套件完全离线：价格页 HTML、OpenRouter 模型目录与汇率接口全部 stub。覆盖：信任围栏、余额解析、价格簿优先级链与快照选取、不可变账本折叠（含同一步替换与按*事件时间*选峰值/闲时档）、子代理聚合（持久子代理树的嵌套/冷会话/失败回退，以及真实 `SessionStore` + 投影注册表上的多层链路），以及客户端表面（jsdom）。
 
+### 发布通道
+
+推送 `v*` 标签后由 `.github/workflows/publish.yml` 发布。标签决定 npm dist-tag，而这不只是记账问题：社区市场安装的是**不带版本号的包名**，也就是 `latest` 指向的那个版本，直接装进访客的运行时。DSH 同时并行两条发布线（`@deepseek-ai/dsh` 把当前线放在 `latest`、把下一条线放在 `next`），而插件版本只能在它的 `@deepseek-ai/dsh*` 对等依赖所接受的那条线上运行，因此 `scripts/dist-tag.mjs` 会用这些依赖范围去比对 registry 上 DSH 自己的发布线，据此选定通道：
+
+| 版本 | 通道 |
+|---|---|
+| 接受 DSH `latest` 线 | `latest` |
+| 只接受 DSH `next` 线 | `next` |
+| 带 `-` 先行版本后缀 | `alpha` |
+
+`node scripts/dist-tag.mjs pairs` 会打印所有已发布版本的归属表；`node scripts/dist-tag.mjs reconcile` 会把每个标签重新指向支持它的最新版本，同时修正早期发布流程写错的标签（`.github/workflows/dist-tags.yml` 可按需单独执行同一套 reconcile）。
+
 ## 文档
 
 - [`src/pricing.ts`](src/pricing.ts)、[`src/pricebook.ts`](src/pricebook.ts)、[`src/session-cost-projection.ts`](src/session-cost-projection.ts)、[`src/session-cost-index.ts`](src/session-cost-index.ts)——解析、锚定与账本契约的详细模块注释
