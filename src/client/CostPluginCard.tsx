@@ -1,5 +1,5 @@
 /**
- * Plugin configuration page (设置 → 插件 → cost-meter 行). DSH 0.1.7 renders a
+ * Plugin configuration page (设置 → 插件 → cost-meter 行). DSH 0.2.0 renders a
  * row's own configuration through the Plugins page's `plugins.row.config`
  * slot, which dispatches the contribution twice: `view: 'summary'` supplies
  * the row's one-liner, and `view: 'page'` is the body of the page the row's

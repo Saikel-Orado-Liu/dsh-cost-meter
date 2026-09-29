@@ -1,10 +1,10 @@
 /* Header utility pill: anchored total / live estimate + expandable detail.
    Geometry mirrors the controls that share the
-   `conversation.session.header.utilities` row in DSH 0.1.7 — the shipped
+   `conversation.session.header.utilities` row in DSH 0.2.0 — the shipped
    open-in-app split capsule is 24px tall with `--dsw-radius-sm` (8px), a 0.5px
    border-l4 hairline, 11px/16px type, 4px gaps and 3px/5px padding — so the
    pill reads as one of the row's controls instead of standing a size apart.
-   (0.1.5 used a 28px/14px control here; 0.1.7 has no such size.) The detail
+   (0.1.5 used a 28px/14px control here; 0.2.0 has no such size.) The detail
    panel rides the product overlay surface (--dsw-specific-menu) and dismisses
    on outside clicks or Escape, like the other header controls. */
 

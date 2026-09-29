@@ -29,7 +29,7 @@ npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 npx @deepseek-ai/dsh web
 ```
 
-如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。插件声明并已验证兼容 DSH `^0.1.7-rc.2`。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
+如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。插件声明并已验证兼容 DSH `^0.2.0-rc.2`。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 概述
 
@@ -63,7 +63,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 | 花费标签页 | `conversation.view` | 全对话总花费（主会话 + 任意层级的子代理）、分类小计、带层级的子代理列表与逐回复锚定账本 |
 | 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，做成与官方「用量」「用时」完全同形的统计胶囊（28px 药丸、悬停底色、`aria-expanded` 展开锚定在触发件上方的对话框）；位置收在统计串末：在「用量」「用时」之后、末尾时刻文本之前，间距沿用行自身的 gap；按计价档位着色（闲时绿、高峰红）；对话框列出三类计费、档位与倍率、模型与快照版本；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标（无价格时显示 `—`） |
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
-| 插件配置页 | `plugins.row.config` | 设置 → 插件 中 cost-meter 行自己的配置页（DSH 0.1.7 以 `<包名>#<行 id>` 为键托管插件自带配置）：按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新。可编辑字段即 schema 中标记 `volatile()` 的字段——部署类字段（端点、凭据引用、刷新周期、可信主机、历史上限）仍在 profile patch 中手工维护，这正是 DSH 配置投影能够写入的边界 |
+| 插件配置页 | `plugins.row.config` | 设置 → 插件 中 cost-meter 行自己的配置页（DSH 0.2.0 以 `<包名>#<行 id>` 为键托管插件自带配置）：按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新。可编辑字段即 schema 中标记 `volatile()` 的字段——部署类字段（端点、凭据引用、刷新周期、可信主机、历史上限）仍在 profile patch 中手工维护，这正是 DSH 配置投影能够写入的边界 |
 
 `/cost-meter` 宿主路由通过 GET 提供余额快照、价格簿视图与子代理合计；通过 POST（`{"action":"refresh"}`）执行手动刷新。与 `/api` 围栏一致，路由只应答 `Host` 头为回环地址或已声明可信主机的请求——这是防 DNS 重绑定的安全校验。
 

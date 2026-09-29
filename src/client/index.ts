@@ -24,7 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // config-page form contract the page hands a row's configuration page.
 import type {} from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 // Type-only: pulls the shared config-form types (ConfigForm types live in the
-// settings package even though DSH 0.1.7 hosts the page on the Plugins page).
+// settings package even though DSH 0.2.0 hosts the page on the Plugins page).
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { en, NS, zh, type ConversationCostKey } from './locales.ts'
@@ -118,7 +118,7 @@ export function apply(ctx: ClientContext): void {
     }, SessionCostPill),
   )
 
-  // Plugin configuration page (设置 → 插件 → cost-meter 行). DSH 0.1.7 hosts one
+  // Plugin configuration page (设置 → 插件 → cost-meter 行). DSH 0.2.0 hosts one
   // plugin row's own configuration under `plugins.row.config`, keyed by
   // `<bundle package name>#<row id>`; the Host half opts out of the generated
   // schema form (`settings.configure({ auto: false })`), so this page is what

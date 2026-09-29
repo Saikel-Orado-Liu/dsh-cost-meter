@@ -145,7 +145,7 @@ const SettingsFields = {
 /**
  * Plugin configuration schema.
  *
- * DSH 0.1.7 derives the page a plugin exposes from this schema alone: a field
+ * DSH 0.2.0 derives the page a plugin exposes from this schema alone: a field
  * is editable only beneath a `volatile()` node (the nearest volatile ancestor
  * decides, so the mode splits cleanly into deployment config edited in the
  * profile patch and the live preferences the Plugins page writes). The
@@ -395,7 +395,7 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
     void pricebookUsd.close()
   }, 'cost-meter: pricebook domains')
 
-  // ── Plugin configuration. DSH 0.1.7 projects each Loader entry's own Config
+  // ── Plugin configuration. DSH 0.2.0 projects each Loader entry's own Config
   //  schema into the Plugins page and persists edits through the profile patch,
   //  so a change re-applies this entry with the new config: there is no
   //  settings namespace to register, and no watch to keep. The volatile fields
