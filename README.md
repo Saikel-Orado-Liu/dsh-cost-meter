@@ -23,13 +23,23 @@ Install it into a web profile with the official DSH CLI (via npx — no global i
 npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 ```
 
+That installs the npm `latest` tag, which tracks the current DSH release line. This plugin publishes on the same two npm channels DSH itself uses, and a build only runs on the DSH line it was built for, so install the channel that matches your runtime:
+
+| npm dist-tag | Tracks | Install command |
+| --- | --- | --- |
+| `latest` | the current DSH release line | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter` |
+| `next` | the upcoming DSH release line | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter@next` |
+| `alpha` | alpha builds | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter@alpha` |
+
+`npm dist-tag ls @deepseek-ai/dsh` shows which DSH version serves each line, and `npm view @gamegeek-saikel/dsh-cost-meter dist-tags` shows which plugin version serves it. A DSH runtime refuses to load a bundle whose peer ranges reject it, so picking the wrong channel fails the install outright rather than half-loading the plugin.
+
 Then start the harness:
 
 ```bash
 npx @deepseek-ai/dsh web
 ```
 
-If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. The plugin declares and is verified against DSH `^0.2.0-rc.2`. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
+If you have the DSH CLI installed globally, you can also use `dsh` instead of `npx @deepseek-ai/dsh`. To install into another profile, replace `web` with your profile name. Each published version declares and is verified against the DSH line its channel names above. The host half requires Node `^22.19.0 || >=24.0.0` and pnpm `11.7.0` for development.
 
 ## Overview
 

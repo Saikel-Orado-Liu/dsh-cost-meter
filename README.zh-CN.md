@@ -23,13 +23,23 @@
 npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 ```
 
+上面装的是 npm 的 `latest` 标签，它跟随当前 DSH 发布线。本插件与 DSH 使用同样的两条 npm 通道，而每个构建只能在它对应的那条 DSH 发布线上运行，因此请按你的运行时选择通道：
+
+| npm dist-tag | 对应 | 安装命令 |
+| --- | --- | --- |
+| `latest` | 当前 DSH 发布线 | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter` |
+| `next` | 下一条 DSH 发布线 | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter@next` |
+| `alpha` | alpha 构建 | `dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter@alpha` |
+
+用 `npm dist-tag ls @deepseek-ai/dsh` 可查看各条通道对应哪个 DSH 版本，用 `npm view @gamegeek-saikel/dsh-cost-meter dist-tags` 查看各条通道对应哪个插件版本。DSH 运行时会拒绝加载对等依赖不匹配的 bundle，因此选错通道会直接安装失败，而不会把插件装成半可用的状态。
+
 然后启动：
 
 ```bash
 npx @deepseek-ai/dsh web
 ```
 
-如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。插件声明并已验证兼容 DSH `^0.2.0-rc.2`。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
+如果已全局安装 DSH CLI，也可以使用 `dsh` 代替 `npx @deepseek-ai/dsh`。安装到其他 profile 时，把 `web` 替换成你的 profile 名称即可。每个已发布版本都声明并已验证兼容上表所列对应通道的 DSH 发布线。开发环境要求 Node `^22.19.0 || >=24.0.0` 与 pnpm `11.7.0`。
 
 ## 概述
 
