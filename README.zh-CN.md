@@ -54,7 +54,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 | 成本锚定 | 只追加价格簿快照；步成本在事件自身时刻只计算一次 |
 | 价格来源 | 手动覆盖 > 官方价格页 > 内置回退 > OpenRouter（仅回退，USD→CNY）> 无 |
 | 官方页适配 | 解析当前 2026-09-10 版中英文页面（`deepseek-flash` / `deepseek-v4-pro` 两列、每个 token 桶行内的空闲/高峰单元格，以及英文 UTC 时段），同时兼容此前的合并表与旧版分表；已下线的 `deepseek-v4-flash`、`deepseek-v4-flash-vision-exp` 不再有独立列，按页面说明直接以 Flash 价格计费；页面不再提供旧单价表时继续用内置历史单价锚定 `single` |
-| 峰值定价 | 2026-08-17 00:00 北京生效；高峰窗口仅周一至周五（中英文页面时区可能不同，缺省 09:00–12:00 / 14:00–18:00 北京），因此周六、周日全天及其余时段均为半价闲时 |
+| 峰值定价 | 2026-08-17 00:00 北京生效；高峰窗口仅周一至周五，且不含中国法定节假日（中英文页面时区可能不同，缺省 09:00–12:00 / 14:00–18:00 北京），因此周末、法定节假日全天及其余时段均为半价闲时 |
 | 成本公式 | 未命中输入 + 缓存命中（命中价）+ 缓存写入（按未命中输入价计）+ 输出，每百万 tokens，CNY |
 | 账户余额 | 官方 `GET /user/balance`，缓存 60 秒，单飞请求，路由带信任围栏 |
 | 子代理支持 | 沿 `subagents.listDescendants` 枚举本会话持久子代理树（子代理再派生的孙代理、已结束或已冷启动的子会话都计入，无层数上限）；账本优先取常驻会话的投影，未常驻的经 `sessionQuery.readSession` + `sessionProjections.restore` 从其持久日志冷读——因此主机重启后，旧会话的历史子代理花费同样会被补算；未挂载该服务时回退到活跃代理树 BFS |
@@ -73,7 +73,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 | 花费标签页 | `conversation.view` | 全对话总花费（主会话 + 任意层级的子代理）、分类小计、带层级的子代理列表与逐回复锚定账本 |
 | 每条回复成本小标签 | `conversation.chat.assistant-actions` | 单条已定稿回复的锚定成本，做成与官方「用量」「用时」完全同形的统计胶囊（28px 药丸、悬停底色、`aria-expanded` 展开锚定在触发件上方的对话框）；位置收在统计串末：在「用量」「用时」之后、末尾时刻文本之前，间距沿用行自身的 gap；按计价档位着色（闲时绿、高峰红）；对话框列出三类计费、档位与倍率、模型与快照版本；插槽只给出消息 id，由 `sessionCostIndex` 投影解析为账本坐标（无价格时显示 `—`） |
 | 头部胶囊 | `conversation.session.header.utilities` | 锚定总花费；流式中显示 `预计 ¥x.xx（估算）`；点击展开详情面板 |
-| 插件配置页 | `plugins.row.config` | 设置 → 插件 中 cost-meter 行自己的配置页（DSH 0.2.0 以 `<包名>#<行 id>` 为键托管插件自带配置）：按模型覆盖价、OpenRouter 别名、缓存折扣、汇率模式、开关与立即刷新。可编辑字段即 schema 中标记 `volatile()` 的字段——部署类字段（端点、凭据引用、刷新周期、可信主机、历史上限）仍在 profile patch 中手工维护，这正是 DSH 配置投影能够写入的边界 |
+| 插件配置页 | `plugins.row.config` | 设置 → 插件 中 cost-meter 行自己的配置页（DSH 0.2.0 以 `<包名>#<行 id>` 为键托管插件自带配置）：按模型覆盖价、OpenRouter 别名、节假日日历的额外休息日与工作日、缓存折扣、汇率模式、开关与立即刷新。可编辑字段即 schema 中标记 `volatile()` 的字段——部署类字段（端点、凭据引用、刷新周期、可信主机、历史上限）仍在 profile patch 中手工维护，这正是 DSH 配置投影能够写入的边界 |
 
 `/cost-meter` 宿主路由通过 GET 提供余额快照、价格簿视图与子代理合计；通过 POST（`{"action":"refresh"}`）执行手动刷新。与 `/api` 围栏一致，路由只应答 `Host` 头为回环地址或已声明可信主机的请求——这是防 DNS 重绑定的安全校验。
 
@@ -83,7 +83,7 @@ DeepSeek 的价格随时间变化（官方价目表、USD→CNY 汇率、2026-08
 
 - **优先级链**——按规范模型键（`provider/model`、裸模型名，或 DeepSeek 系模型的 `flash`/`pro` 定价键）：手动覆盖 > 官方页面 > 内置回退 > OpenRouter（仅回退，USD→CNY，缓存读按配置折扣）> 无。
 - **快照选取**——`snapshotForTime` 取 `effectiveAt <= 事件时间` 的最新快照（安装前的会话一次性锚到首个快照）。
-- **峰值/闲时**——2026-08-17 上线前所有步按单一价目计费；上线后按事件自身时刻与该价格簿页面的时段表选档（中英文页面各自解析自己的高峰窗口，英文新版为 UTC，抓取失败时回退到北京 09:00–12:00 / 14:00–18:00，其余闲时）。官方页面限定高峰仅周一至周五，因此北京时间周六、周日全天为闲时。新版合并表没有旧单价列时，`single` 继续锚定内置历史单价；页面若有独立旧表，则优先用它。每步的档位在折叠时锚定一次，逐回复卡片与回复小标签永远显示该轮对话当时被计价的档位，而不是查看时刻的档位。
+- **峰值/闲时**——2026-08-17 上线前所有步按单一价目计费；上线后按事件自身时刻与该价格簿页面的时段表选档（中英文页面各自解析自己的高峰窗口，英文新版为 UTC，抓取失败时回退到北京 09:00–12:00 / 14:00–18:00，其余闲时）。官方页面限定高峰仅周一至周五且不含中国法定节假日，因此时区表内的周六、周日全天为闲时，法定节假日同样全天闲时——即便在英文页面的 UTC 窗口下，节假日也按北京日历日判定。日期取自国务院办公厅通知，转录在 [`src/holidays.ts`](src/holidays.ts)（2026 年，依据国办发明电〔2025〕7号）；尚未覆盖的年份回退到「周一至周五」原规则，可用设置页的休息日/工作日清单在不发版的情况下补齐。调休来的周末工作日仍按闲时计（因为页面写的是周一至周五），若要按高峰计，把它们列进工作日清单即可。新版合并表没有旧单价列时，`single` 继续锚定内置历史单价；页面若有独立旧表，则优先用它。每步的档位在折叠时锚定一次，逐回复卡片与回复小标签永远显示该轮对话当时被计价的档位，而不是查看时刻的档位。
 - **不可变账本**——`sessionCost` 投影（`src/session-cost-projection.ts`）把 `request/header`（模型）与携带用量的事件折叠为逐步记录；同一 (turn, step) 的第二次用量样本**替换**第一条（同一步终结，而非重新计价），总计以 O(1) 增量维护。配套的 `sessionCostIndex` 投影（`src/session-cost-index.ts`）把每条已定稿助手消息 id 映射到其账本坐标；它不读价格簿、不算成本，因此折叠它绝不会重新计价任何会话。
 
 ## 项目结构
@@ -96,6 +96,7 @@ src/
   pricebook.ts                  # 只追加快照、优先级链、存储域
   session-cost-projection.ts    # sessionCost 投影（不可变逐步账本）
   session-cost-index.ts         # sessionCostIndex：消息 id → 账本坐标
+  holidays.ts                   # 中国法定节假日日历及其部署覆盖项
   subagent-cost.ts              # 子代理成本聚合（持久子代理树 + 活跃代理树回退）
   invariant.ts                  # 路由释放对称性 invariant 伴生插件
   client/                       # 浏览器半区：5 个插槽组件 + 数学/格式化/本地化
@@ -131,7 +132,7 @@ pnpm build       # tsc -b && tsdown（lib/ + lib/client.js）
 
 ## 文档
 
-- [`src/pricing.ts`](src/pricing.ts)、[`src/pricebook.ts`](src/pricebook.ts)、[`src/session-cost-projection.ts`](src/session-cost-projection.ts)、[`src/session-cost-index.ts`](src/session-cost-index.ts)——解析、锚定与账本契约的详细模块注释
+- [`src/pricing.ts`](src/pricing.ts)、[`src/pricebook.ts`](src/pricebook.ts)、[`src/session-cost-projection.ts`](src/session-cost-projection.ts)、[`src/session-cost-index.ts`](src/session-cost-index.ts)、[`src/holidays.ts`](src/holidays.ts)——解析、锚定、节假日日历与账本契约的详细模块注释
 - [`README.md`](README.md) — English version
 
 ## 许可证

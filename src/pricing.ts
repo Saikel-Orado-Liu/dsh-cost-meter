@@ -23,6 +23,7 @@
  */
 
 import type { CurrentPricing, PeakHourRange, PeakModelPricing, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot } from './types.ts'
+import { beijingDateKey, calendarsOf, withHolidayCalendar } from './holidays.ts'
 
 /** Official pricing page URL (zh-cn). */
 export const PRICING_URL = 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing/'
@@ -36,13 +37,15 @@ export const PEAK_PRICING_START_MS = Date.UTC(2026, 7, 16, 16, 0, 0)
 /**
  * Built-in fallback zh peak schedule: the official page's windows in Beijing
  * time (peak 09:00-12:00 / 14:00-18:00, Monday–Friday; everything else,
- * including all of Saturday and Sunday, off-peak).
+ * including all of Saturday, Sunday, and Chinese public holidays, off-peak).
+ * The built-in holiday calendar is attached so the fallback classifies exactly
+ * like the page it stands in for.
  */
-export const PEAK_SCHEDULE_ZH: PeakSchedule = {
+export const PEAK_SCHEDULE_ZH: PeakSchedule = withHolidayCalendar({
   timezone: 'Asia/Shanghai',
   ranges: [[9, 12], [14, 18]],
   weekdaysOnly: true,
-}
+})
 
 /**
  * Built-in fallback en peak schedule. Kept as a separate constant from the zh
@@ -50,11 +53,11 @@ export const PEAK_SCHEDULE_ZH: PeakSchedule = {
  * each pricebook parses its own page and falls back to this locale-matched
  * default only when the page carries no schedule.
  */
-export const PEAK_SCHEDULE_EN: PeakSchedule = {
+export const PEAK_SCHEDULE_EN: PeakSchedule = withHolidayCalendar({
   timezone: 'UTC',
   ranges: [[1, 4], [6, 10]],
   weekdaysOnly: true,
-}
+})
 
 /**
  * Built-in fallback prices: the pre-rollout official list for the Flash and
@@ -425,13 +428,16 @@ export function parsePeakSchedule(html: string, locale: 'zh' | 'en' = 'zh'): Pea
   }
   const weekdaysOnly = /(?:周一|星期[一二三四五]|工作日)/.test(window)
     || /\b(?:Monday\s+through\s+Friday|weekdays?)\b/i.test(window)
+  // The page states the holiday exclusion but never its dates, so the parsed
+  // schedule carries the built-in calendar; a deployment's adjustments are
+  // composed on top of it by the pricebook.
   if (/\b(?:beijing|北京时间|china standard)\b/i.test(window) || /\butc\s*\+\s*8\b/i.test(window)) {
-    return { timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
+    return withHolidayCalendar({ timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) })
   }
   if (/\butc\b/i.test(window)) {
-    return { timezone: 'UTC', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
+    return withHolidayCalendar({ timezone: 'UTC', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) })
   }
-  return { timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) }
+  return withHolidayCalendar({ timezone: 'Asia/Shanghai', ranges, ...(weekdaysOnly ? { weekdaysOnly: true } : {}) })
 }
 
 /**
@@ -500,9 +506,21 @@ export async function fetchPricing(
 /**
  * Whether the given instant is a peak-pricing hour under one schedule: the
  * zh fallback is Beijing time 09:00-12:00 and 14:00-18:00; each pricebook
- * passes the schedule parsed from its own (zh or en) pricing page. When the
- * schedule is Monday–Friday only, Saturdays and Sundays in the schedule's
- * timezone are off-peak all day.
+ * passes the schedule parsed from its own (zh or en) pricing page.
+ *
+ * The days are decided in this order, which is exactly what the pages state:
+ * 1. a date in the schedule's `workdays` follows the working-day windows, even
+ *    on a weekend or a holiday (the 调休 escape hatch);
+ * 2. otherwise a date in its `holidays` (the built-in Chinese public holidays,
+ *    plus any the deployment added) is off-peak in full;
+ * 3. otherwise, when the schedule is Monday–Friday only, Saturdays and Sundays
+ *    in the schedule's timezone are off-peak all day;
+ * 4. otherwise the hour decides, against the schedule's own windows.
+ *
+ * Holiday membership is always judged on the Beijing calendar date, whichever
+ * timezone the schedule states its windows in — the holidays are Chinese public
+ * holidays, and the English page's UTC windows are the same Beijing hours.
+ *
  * @param now - the instant to classify.
  * @param schedule - the peak-hour schedule to classify against.
  * @returns true during peak hours.
@@ -513,14 +531,28 @@ export function isPeakHour(now: Date = new Date(), schedule: PeakSchedule = PEAK
     hour: 'numeric',
     hour12: false,
     weekday: 'short',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
   }).formatToParts(now)
+  const pick = (type: string): string | undefined => parts.find(part => part.type === type)?.value
+  const inWindows = (): boolean => {
+    const hour = Number(pick('hour'))
+    if (Number.isNaN(hour)) return false
+    return schedule.ranges.some(([start, end]) => hour >= start && hour < end)
+  }
+  const calendars = calendarsOf(schedule)
+  const localDate = `${pick('year')}-${pick('month')}-${pick('day')}`
+  // The zh schedule already reports Beijing wall-clock parts, so its local date
+  // is the Beijing date; the en schedule's UTC parts are not.
+  const beijingDate = schedule.timezone === 'Asia/Shanghai' ? localDate : beijingDateKey(now)
+  if (calendars.work.has(beijingDate)) return inWindows()
+  if (calendars.rest.has(beijingDate)) return false
   if (schedule.weekdaysOnly === true) {
-    const weekday = parts.find(part => part.type === 'weekday')?.value
+    const weekday = pick('weekday')
     if (weekday === 'Sat' || weekday === 'Sun') return false
   }
-  const hour = Number(parts.find(part => part.type === 'hour')?.value)
-  if (Number.isNaN(hour)) return false
-  return schedule.ranges.some(([start, end]) => hour >= start && hour < end)
+  return inWindows()
 }
 
 /**

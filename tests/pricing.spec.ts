@@ -248,7 +248,7 @@ describe('updated 2026-08-21 combined table', () => {
         peak: { cacheReadPerMillion: 0.014, inputPerMillion: 0.44, outputPerMillion: 1.32 },
       },
     })
-    expect(parsePeakSchedule(PAGE_HTML_2026_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+    expect(parsePeakSchedule(PAGE_HTML_2026_EN, 'en')).toMatchObject({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 
   it('folds the updated zh page into a clean official snapshot', async () => {
@@ -278,7 +278,7 @@ describe('updated 2026-08-21 combined table', () => {
     expect(snapshot.current.vision).toEqual(snapshot.current.flash)
     expect(snapshot.peak?.vision?.peak.outputPerMillion).toBe(1.32)
     expect(snapshot.legacyCurrent).toBeUndefined()
-    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+    expect(snapshot.schedule).toMatchObject({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 })
 
@@ -319,7 +319,7 @@ describe('current 2026-09-10 combined table (flash + pro, weekday-only peak)', (
         peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
       },
     })
-    expect(parsePeakSchedule(PAGE_HTML_2026_09_EN, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+    expect(parsePeakSchedule(PAGE_HTML_2026_09_EN, 'en')).toMatchObject({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 
   it('folds the current zh page into a snapshot that matches the built-in fallback', async () => {
@@ -356,22 +356,22 @@ describe('current 2026-09-10 combined table (flash + pro, weekday-only peak)', (
     expect(snapshot.peak?.flash).toEqual(FALLBACK_PEAK_USD.flash)
     expect(snapshot.current.pro).toEqual(FALLBACK_PEAK_USD.pro.offPeak)
     expect(snapshot.peak?.pro).toEqual(FALLBACK_PEAK_USD.pro)
-    expect(snapshot.schedule).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
+    expect(snapshot.schedule).toMatchObject({ timezone: 'UTC', ranges: [[1, 4], [6, 10]], weekdaysOnly: true })
   })
 })
 
 describe('parsePeakSchedule', () => {
   it('parses the zh windows and the Beijing timezone', () => {
-    expect(parsePeakSchedule(PAGE_HTML, 'zh')).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+    expect(parsePeakSchedule(PAGE_HTML, 'zh')).toMatchObject({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
   })
 
   it('parses the en windows; a Beijing/UTC+8 mention wins over bare UTC', () => {
-    expect(parsePeakSchedule(PAGE_HTML_EN, 'en')).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+    expect(parsePeakSchedule(PAGE_HTML_EN, 'en')).toMatchObject({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
   })
 
   it('parses a UTC-stated English schedule into the UTC timezone', () => {
     const html = '<p>Peak hours: 01:00-04:00 and 06:00-10:00 (UTC)</p>'
-    expect(parsePeakSchedule(html, 'en')).toEqual({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
+    expect(parsePeakSchedule(html, 'en')).toMatchObject({ timezone: 'UTC', ranges: [[1, 4], [6, 10]] })
   })
 
   it('returns undefined when the page carries no schedule', () => {
@@ -391,7 +391,7 @@ describe('fetchPricing', () => {
     expect(snapshot.current.flash).toEqual(FALLBACK_CURRENT.flash)
     expect(snapshot.peak?.pro.peak.outputPerMillion).toBe(27)
     expect(snapshot.error).toBeUndefined()
-    expect(snapshot.schedule).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+    expect(snapshot.schedule).toMatchObject({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
   })
 
   it('folds the English page into a USD snapshot when locale is en', async () => {
@@ -404,7 +404,7 @@ describe('fetchPricing', () => {
     expect(snapshot.currency).toBe('USD')
     expect(snapshot.current.flash.inputPerMillion).toBe(0.22)
     expect(snapshot.peak?.flash.peak.inputPerMillion).toBe(0.44)
-    expect(snapshot.schedule).toEqual({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
+    expect(snapshot.schedule).toMatchObject({ timezone: 'Asia/Shanghai', ranges: [[9, 12], [14, 18]] })
     expect(fetchImpl).toHaveBeenCalledWith(PRICING_URL_EN, expect.anything())
   })
 

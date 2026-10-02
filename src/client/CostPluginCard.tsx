@@ -44,6 +44,8 @@ export interface CostPluginCardProps {
 interface Staged {
   overridesText: string
   aliasesText: string
+  holidayRestDaysText: string
+  holidayWorkdaysText: string
   cacheReadDiscount: string
   fxMode: 'auto' | 'manual'
   manualRate: string
@@ -54,6 +56,8 @@ interface Staged {
 interface SectionShape {
   overrides?: Record<string, unknown>
   aliases?: Record<string, string>
+  holidayRestDays?: string[]
+  holidayWorkdays?: string[]
   cacheReadDiscount?: number
   fxMode?: 'auto' | 'manual'
   manualRate?: number
@@ -62,6 +66,14 @@ interface SectionShape {
 }
 
 const json = (value: unknown): string => JSON.stringify(value ?? {}, null, 2)
+/** Render one date list; a missing list stages as an empty array, not an object. */
+const jsonDates = (value: unknown): string => JSON.stringify(Array.isArray(value) ? value : [], null, 2)
+/** Parse one staged date list; the Host schema rejects a malformed date. */
+const parseDates = (text: string): string[] => {
+  const parsed: unknown = JSON.parse(text)
+  if (!Array.isArray(parsed)) throw new Error('expected a JSON array of YYYY-MM-DD date strings')
+  return parsed as string[]
+}
 /** The section's set of user-overridden fields, read from the raw user layer. */
 const overridden = (user: unknown): Record<string, unknown> =>
   typeof user === 'object' && user !== null && !Array.isArray(user) ? user as Record<string, unknown> : {}
@@ -84,6 +96,8 @@ export const CostPluginCard = memo(function CostPluginCard({ view, form, t }: Co
     setStaged({
       overridesText: json(value.overrides),
       aliasesText: json(value.aliases),
+      holidayRestDaysText: jsonDates(value.holidayRestDays),
+      holidayWorkdaysText: jsonDates(value.holidayWorkdays),
       cacheReadDiscount: String(value.cacheReadDiscount ?? 0.25),
       fxMode: value.fxMode ?? 'auto',
       manualRate: String(value.manualRate ?? 7.2),
@@ -134,9 +148,13 @@ export const CostPluginCard = memo(function CostPluginCard({ view, form, t }: Co
     setError(null)
     let overrides: Record<string, unknown>
     let aliases: Record<string, string>
+    let restDays: string[]
+    let workdays: string[]
     try {
       overrides = JSON.parse(staged.overridesText) as Record<string, unknown>
       aliases = JSON.parse(staged.aliasesText) as Record<string, string>
+      restDays = parseDates(staged.holidayRestDaysText)
+      workdays = parseDates(staged.holidayWorkdaysText)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
       setBusy(false)
@@ -145,6 +163,8 @@ export const CostPluginCard = memo(function CostPluginCard({ view, form, t }: Co
     const ops: ConfigOp[] = [
       { op: 'set', path: ['overrides'], value: overrides },
       { op: 'set', path: ['aliases'], value: aliases },
+      { op: 'set', path: ['holidayRestDays'], value: restDays },
+      { op: 'set', path: ['holidayWorkdays'], value: workdays },
       { op: 'set', path: ['fxMode'], value: staged.fxMode },
       { op: 'set', path: ['balanceEnabled'], value: staged.balanceEnabled },
       { op: 'set', path: ['openRouterEnabled'], value: staged.openRouterEnabled },
@@ -305,6 +325,33 @@ export const CostPluginCard = memo(function CostPluginCard({ view, form, t }: Co
           readOnly={readOnly}
           onChange={event => setStaged(prev => prev === null ? prev : { ...prev, aliasesText: event.target.value })}
         />
+      </div>
+      <div className={css.field}>
+        <div className={css.head}>
+          <span className={css.label}>{t('settings.holidayRestDays')}</span>
+          {'holidayRestDays' in user && <span className={css.overridden}>{t('settings.overridden')}</span>}
+        </div>
+        <textarea
+          className={css.textarea}
+          value={staged?.holidayRestDaysText ?? ''}
+          spellCheck={false}
+          readOnly={readOnly}
+          onChange={event => setStaged(prev => prev === null ? prev : { ...prev, holidayRestDaysText: event.target.value })}
+        />
+      </div>
+      <div className={css.field}>
+        <div className={css.head}>
+          <span className={css.label}>{t('settings.holidayWorkdays')}</span>
+          {'holidayWorkdays' in user && <span className={css.overridden}>{t('settings.overridden')}</span>}
+        </div>
+        <textarea
+          className={css.textarea}
+          value={staged?.holidayWorkdaysText ?? ''}
+          spellCheck={false}
+          readOnly={readOnly}
+          onChange={event => setStaged(prev => prev === null ? prev : { ...prev, holidayWorkdaysText: event.target.value })}
+        />
+        <div className={css.hint}>{t('settings.holidayHint')}</div>
       </div>
       {error !== null && <p className={css.error}>{t('settings.error', { error })}</p>}
       <div className={css.footer}>

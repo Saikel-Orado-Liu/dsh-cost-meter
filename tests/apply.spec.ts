@@ -151,6 +151,8 @@ describe('apply integration', () => {
       'balanceEnabled',
       'cacheReadDiscount',
       'fxMode',
+      'holidayRestDays',
+      'holidayWorkdays',
       'manualRate',
       'openRouterEnabled',
       'overrides',

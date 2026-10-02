@@ -132,6 +132,20 @@ export interface PeakSchedule {
    * and Sundays off-peak all day in the schedule's own timezone.
    */
   weekdaysOnly?: boolean
+  /**
+   * Beijing-calendar dates (`YYYY-MM-DD`) billed off-peak in full, whatever
+   * their weekday. Both official pages exclude Chinese public holidays from
+   * peak, so the built-in calendar is attached to every schedule by
+   * `withHolidayCalendar`.
+   */
+  holidays?: readonly string[]
+  /**
+   * Beijing-calendar dates (`YYYY-MM-DD`) forced onto the working-day rule, so
+   * their peak windows bill at the peak rate even on a weekend or a holiday —
+   * the escape hatch for a deployment that bills 调休 working weekends as
+   * working days. A date listed here wins over {@link holidays}.
+   */
+  workdays?: readonly string[]
 }
 
 /**

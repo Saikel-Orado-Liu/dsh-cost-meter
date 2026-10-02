@@ -454,6 +454,24 @@ describe('PricebookHandle refresh and mutation', () => {
     expect(() => handle.applySettings({ overrides: 'nonsense' as never })).not.toThrow()
   })
 
+  it('composes the deployment holiday calendar onto the page schedule', () => {
+    const handle = handleWith(initialPricebookState())
+    // The built-in Chinese public holidays ride every schedule by default.
+    expect(handle.schedule.holidays).toContain('2026-10-01')
+    expect(handle.schedule.workdays).toEqual([])
+    handle.applySettings({ holidayRestDays: ['2026-12-31'], holidayWorkdays: ['2026-10-10'] })
+    expect(handle.schedule.holidays).toContain('2026-12-31')
+    expect(handle.schedule.workdays).toEqual(['2026-10-10'])
+    // A later batch that omits the holiday fields keeps the deployment's set.
+    handle.applySettings({ balanceEnabled: false })
+    expect(handle.schedule.holidays).toContain('2026-12-31')
+    expect(handle.schedule.workdays).toEqual(['2026-10-10'])
+    // The band follows the composed calendar, not the bare page schedule.
+    const newYearsEve = new Date('2026-12-31T10:00:00+08:00').getTime()
+    expect(bandForTime(newYearsEve, handle.schedule)).toBe('offPeak')
+    expect(bandForTime(newYearsEve, PEAK_SCHEDULE_ZH)).toBe('peak')
+  })
+
   it('carries the USD pricebook its own (en) schedule and bands against it', async () => {
     const enOfficial: PricingSnapshot = {
       ...OFFICIAL,
@@ -468,7 +486,7 @@ describe('PricebookHandle refresh and mutation', () => {
       snapshotHistoryLimit: 50,
     }, { ...initialPricebookState(), snapshots: [snapshotFixture(1, 0, { pro: { source: 'official', single: FALLBACK_CURRENT.pro, offPeak: FALLBACK_PEAK.pro.offPeak, peak: FALLBACK_PEAK.pro.peak } })] }, 'USD')
     await handle.refresh({ official: enOfficial })
-    expect(handle.view().schedule).toEqual({ timezone: 'UTC', ranges: [[0, 6]] })
+    expect(handle.view().schedule).toMatchObject({ timezone: 'UTC', ranges: [[0, 6]] })
     // 05:30 UTC: peak under the en (UTC) schedule, off-peak under the zh default.
     const at0530 = Date.UTC(2026, 7, 17, 5, 30, 0)
     expect(handle.priceFor('deepseek-official', 'deepseek-v4-pro', at0530)?.band).toBe('peak')

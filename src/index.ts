@@ -107,6 +107,19 @@ export interface Config {
   manualRate?: Volatile<number>
   /** Whether the balance readout is shown in the UI. */
   balanceEnabled?: Volatile<boolean>
+  /**
+   * Extra Beijing-calendar dates (`YYYY-MM-DD`) billed off-peak in full — a
+   * bridge day, a company holiday, or a year the built-in calendar does not
+   * cover yet.
+   */
+  holidayRestDays?: Volatile<string[]>
+  /**
+   * Dates (`YYYY-MM-DD`) forced onto the working-day rule, so their peak
+   * windows bill as peak even on a weekend or a holiday. The official pages
+   * restrict peak to Monday–Friday, so the State Council's 调休 working weekends
+   * stay off-peak unless they are listed here.
+   */
+  holidayWorkdays?: Volatile<string[]>
 }
 
 const modelPriceSchema = z.object({
@@ -140,6 +153,8 @@ const SettingsFields = {
   manualRate: z.number().min(0.001).default(DEFAULT_FX_RATE),
   balanceEnabled: z.boolean().default(true),
   openRouterEnabled: z.boolean().default(true),
+  holidayRestDays: z.array(z.string().pattern(/^\d{4}-\d{2}-\d{2}$/)).default([]),
+  holidayWorkdays: z.array(z.string().pattern(/^\d{4}-\d{2}-\d{2}$/)).default([]),
 }
 
 /**
@@ -177,6 +192,8 @@ export const Config = z.object({
   manualRate: SettingsFields.manualRate.volatile(),
   balanceEnabled: SettingsFields.balanceEnabled.volatile(),
   openRouterEnabled: SettingsFields.openRouterEnabled.volatile(),
+  holidayRestDays: SettingsFields.holidayRestDays.volatile(),
+  holidayWorkdays: SettingsFields.holidayWorkdays.volatile(),
 }) as unknown as z<Config>
 
 /** Resolved plugin facts after schema defaults. */
@@ -411,6 +428,8 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
       manualRate: settings.manualRate?.get(),
       balanceEnabled: settings.balanceEnabled?.get(),
       openRouterEnabled: settings.openRouterEnabled?.get(),
+      holidayRestDays: settings.holidayRestDays?.get(),
+      holidayWorkdays: settings.holidayWorkdays?.get(),
     }
     pricebookCny.applySettings(editable)
     pricebookUsd.applySettings(editable)

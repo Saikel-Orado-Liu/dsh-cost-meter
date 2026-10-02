@@ -193,6 +193,9 @@ function zhT(key: string, params?: Record<string, string>): string {
     'settings.refreshing': '刷新中…',
     'settings.overrides': '按模型价目表（手动覆盖，元/百万 tokens）',
     'settings.aliases': 'OpenRouter 别名映射',
+    'settings.holidayRestDays': '额外休息日（节假日日历）',
+    'settings.holidayWorkdays': '额外工作日（上班时段按高峰计）',
+    'settings.holidayHint': 'JSON 字符串数组，元素为 YYYY-MM-DD。内置日历已含 2026 年中国法定节假日——官方页面规定这些日期全天为闲时；未覆盖的年份可用这里补上。',
     'settings.discount': '缓存折扣系数（OpenRouter）',
     'settings.fx': '汇率（USD→CNY）',
     'settings.fx.auto': '自动',
@@ -908,6 +911,8 @@ describe('CostPluginCard', () => {
     expect(screen.getByTestId('cost-plugin-card').textContent).not.toContain('v1')
     expect(screen.getByText('缓存折扣系数（OpenRouter）')).not.toBeNull()
     expect(screen.getByText('OpenRouter 别名映射')).not.toBeNull()
+    expect(screen.getByText('额外休息日（节假日日历）')).not.toBeNull()
+    expect(screen.getByText('额外工作日（上班时段按高峰计）')).not.toBeNull()
     // Save submits every staged field as one revision-fenced batch.
     await waitFor(() => expect(screen.getByText('保存')).not.toBeNull())
     fireEvent.click(screen.getByText('保存'))
@@ -915,6 +920,8 @@ describe('CostPluginCard', () => {
     expect(form.mutate).toHaveBeenCalledWith([
       { op: 'set', path: ['overrides'], value: {} },
       { op: 'set', path: ['aliases'], value: { 'deepseek/deepseek-chat': 'deepseek-v4-flash' } },
+      { op: 'set', path: ['holidayRestDays'], value: [] },
+      { op: 'set', path: ['holidayWorkdays'], value: [] },
       { op: 'set', path: ['fxMode'], value: 'auto' },
       { op: 'set', path: ['balanceEnabled'], value: true },
       { op: 'set', path: ['openRouterEnabled'], value: true },

@@ -22,6 +22,7 @@ import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
 import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS, PEAK_SCHEDULE_EN, PEAK_SCHEDULE_ZH } from './pricing.ts'
+import { withHolidayCalendar, type HolidayOverrides } from './holidays.ts'
 import type {
   Currency,
   CurrentPricing,
@@ -578,8 +579,12 @@ export class PricebookHandle {
   private lastOpenRouter: OpenRouterInput | null = null
   private lastFxError: string | undefined
   private fetchedAt = 0
-  /** Peak-hour schedule of the pricebook's page (locale-matched). */
+  /** Peak-hour schedule in effect: the page's windows plus the holiday calendars. */
   schedule: PeakSchedule
+  /** The page's own schedule, before this deployment's holiday adjustments. */
+  private pageSchedule: PeakSchedule
+  /** The deployment's holiday adjustments (settings page; not persisted here). */
+  private holidayOverrides: HolidayOverrides = {}
 
   constructor(
     private readonly ctx: Context,
@@ -589,8 +594,21 @@ export class PricebookHandle {
     schedule?: PeakSchedule,
   ) {
     this.state = persisted ?? { ...initialPricebookState(), openRouterEnabled: config.openRouterEnabled }
-    this.schedule = schedule ?? (currency === 'USD' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH)
+    this.pageSchedule = schedule ?? (currency === 'USD' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH)
+    this.schedule = withHolidayCalendar(this.pageSchedule)
     this.lastOfficial = { current: currency === 'USD' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT, schedule: this.schedule }
+  }
+
+  /**
+   * Adopt one page schedule and re-derive the effective one. The holiday
+   * calendars are composed here rather than in the parser so a deployment's
+   * settings always ride the schedule the pricebook actually classifies with
+   * and serves to the browser.
+   * @param schedule - the schedule as parsed from the page (or the fallback).
+   */
+  private adoptSchedule(schedule: PeakSchedule): void {
+    this.pageSchedule = schedule
+    this.schedule = withHolidayCalendar(schedule, this.holidayOverrides)
   }
 
   /**
@@ -728,7 +746,7 @@ export class PricebookHandle {
   }): Promise<void> {
     const official = options?.official ?? await fetchPricing(globalThis.fetch, 15_000, this.currency === 'USD' ? 'en' : 'zh')
     this.lastOfficial = officialInputOf(official)
-    this.schedule = this.lastOfficial.schedule
+    this.adoptSchedule(this.lastOfficial.schedule)
     this.lastFxError = undefined
     if (options?.fx !== undefined) {
       this.applyFxResult(options.fx.rate, options.fx.error)
@@ -816,8 +834,21 @@ export class PricebookHandle {
     manualRate: number | undefined
     balanceEnabled: boolean | undefined
     openRouterEnabled: boolean | undefined
+    holidayRestDays: readonly string[] | undefined
+    holidayWorkdays: readonly string[] | undefined
   }>): void {
     try {
+      // The holiday adjustments are deployment configuration, not pricebook
+      // state: compose them onto the page schedule before the state short-cut
+      // below, which only guards the persisted fields.
+      if (settings.holidayRestDays !== undefined || settings.holidayWorkdays !== undefined) {
+        this.holidayOverrides = {
+          ...this.holidayOverrides,
+          ...(settings.holidayRestDays === undefined ? {} : { restDays: settings.holidayRestDays }),
+          ...(settings.holidayWorkdays === undefined ? {} : { workdays: settings.holidayWorkdays }),
+        }
+        this.schedule = withHolidayCalendar(this.pageSchedule, this.holidayOverrides)
+      }
       let next = this.state
       if (settings.overrides !== undefined) next = { ...next, overrides: settings.overrides }
       if (settings.aliases !== undefined) next = { ...next, aliases: settings.aliases }
