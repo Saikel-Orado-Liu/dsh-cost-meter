@@ -117,7 +117,7 @@ pnpm test        # vitest run (hermetic, network stubbed)
 pnpm build       # tsc -b && tsdown (lib/ + lib/client.js)
 ```
 
-The test suites are fully offline: pricing-page HTML, OpenRouter models, and the FX endpoint are all stubbed. Tests cover the trust fence, balance parsing, the pricebook priority chain and snapshot selection, the immutable ledger fold (including same-step replacement and peak/off-peak band selection at the *event* time), the subagent aggregation (nested and cold children, listing-failure fallback, and a multi-level chain over a real `SessionStore` plus projection registry), and the client surfaces (jsdom).
+The test suites are fully offline: pricing-page HTML, OpenRouter models, and the FX endpoint are all stubbed. Tests cover the trust fence, balance parsing, the pricebook priority chain and snapshot selection, the immutable ledger fold (including same-step replacement and peak/off-peak band selection at the *event* time), the subagent aggregation (nested and cold children, listing-failure fallback, and a multi-level chain over a real `SessionStore` plus projection registry), and the client surfaces (jsdom). `.github/workflows/compat.yml` runs the same build and suite against the newest DSH patch on each of `main`, `next`, and `alpha` every day, so a DSH release that breaks a channel turns CI red without a manual update.
 
 ### Release channels
 
