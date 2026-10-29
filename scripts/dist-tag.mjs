@@ -216,7 +216,11 @@ function newestPerTag(rows) {
 
 const [command = 'pairs', ...flags] = process.argv.slice(2)
 /** Reconcile can wait for a version that `npm publish` has just added. */
-const waitFor = flags.find(flag => flag.startsWith('--wait-for='))?.slice('--wait-for='.length)
+const waitForFlag = flags.find(flag => flag.startsWith('--wait-for='))
+const waitForIndex = flags.indexOf('--wait-for')
+const waitFor = waitForFlag !== undefined
+  ? waitForFlag.slice('--wait-for='.length)
+  : waitForIndex >= 0 ? flags[waitForIndex + 1] : undefined
 const dryRun = flags.includes('--dry-run')
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const lines = dshLines()
