@@ -219,6 +219,9 @@ describe('foldSessionCost pricing and anchoring', () => {
     expect(zero).toBe(state)
     const unrelated = foldSessionCost(state, event('turn/start', 2_000, { turn: 1 }), handle)
     expect(unrelated).toBe(state)
+    // The session header event carries no `data` at all.
+    const header = foldSessionCost(state, event('session', 1_000, undefined as unknown as Record<string, unknown>), handle)
+    expect(header).toBe(state)
   })
 
   it('sorts the view by turn then step and sums totals across turns', () => {
