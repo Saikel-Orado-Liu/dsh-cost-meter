@@ -218,8 +218,10 @@ function sameStep(left: SessionCostStep, right: SessionCostStep): boolean {
 
 /** Coordinates carried by an event, when it has them. */
 function coordinatesOf(event: SessionEvent): CallCoordinates | null {
-  const data = event.data as { turn?: unknown; step?: unknown }
-  return typeof data.turn === 'number' && typeof data.step === 'number'
+  // `session` (the header event) carries no `data` at all.
+  const data = (event as unknown as { data?: { turn?: unknown; step?: unknown } }).data
+  return data !== undefined && data !== null
+    && typeof data.turn === 'number' && typeof data.step === 'number'
     ? { turn: data.turn, step: data.step }
     : null
 }
