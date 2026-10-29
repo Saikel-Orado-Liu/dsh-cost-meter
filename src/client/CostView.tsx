@@ -88,7 +88,19 @@ export const CostView = memo(function CostView({ useProjection, sessionId, t }: 
           <span>{t('view.uncached')}: {money(totals.uncachedCost)}</span>
           <span>{t('view.cacheRead')}: {money(totals.cacheReadCost)}</span>
           <span>{t('view.output')}: {money(totals.outputCost)}</span>
+          {(totals.webCost ?? 0) > 0 && (
+            <span>
+              {t('view.web')}: {money(totals.webCost ?? 0)} · {t('web.requests', {
+                search: String(totals.searchRequests ?? 0),
+                fetch: String(totals.fetchRequests ?? 0),
+              })}
+            </span>
+          )}
         </div>
+        {cost?.web !== undefined && !cost.web.billingStarted
+          && (cost.web.searchRequests + cost.web.fetchRequests) > 0 && (
+          <div className={css.unpricedNote}>{t('web.grace')}</div>
+        )}
         {totals.unpricedSteps > 0 && (
           <div className={css.unpricedNote}>{t('view.unpriced', { count: String(totals.unpricedSteps) })}</div>
         )}

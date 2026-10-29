@@ -17,10 +17,12 @@ import {
   parseCurrentTableEn,
   parsePeakSchedule,
   parsePeakTable,
+  parseWebPricing,
   parsePeakTableEn,
   PEAK_SCHEDULE_EN,
   PEAK_SCHEDULE_ZH,
   PRICING_URL_EN,
+  WEB_BILLING_START_MS,
 } from '../src/pricing.ts'
 
 /** Real markup captured from api-docs.deepseek.com (2026-08-14). */
@@ -512,3 +514,43 @@ describe('effectiveBucket', () => {
     expect(effectiveBucket(FALLBACK_CURRENT, undefined, true, at(20), 'flash').inputPerMillion).toBe(1)
   })
 });
+/** The Search / Fetch table added to the official page (2026-10-30). */
+const PAGE_HTML_WEB_ZH = `
+<html><body>
+<h2>网页搜索与抓取价格</h2>
+<table>
+<tr><td>API</td><td>计费单位</td><td>价格</td></tr>
+<tr><td>Search</td><td>每 1,000 次成功请求</td><td>5元</td></tr>
+<tr><td>Fetch</td><td>每 1,000 次成功请求</td><td>5元</td></tr>
+</table>
+</body></html>
+`
+
+const PAGE_HTML_WEB_EN = `
+<html><body>
+<h2>Search &amp; Fetch Pricing</h2>
+<table>
+<tr><td>API</td><td>Unit</td><td>Price</td></tr>
+<tr><td>Search</td><td>Per 1,000 successful requests</td><td>$0.75</td></tr>
+<tr><td>Fetch</td><td>Per 1,000 successful requests</td><td>$0.75</td></tr>
+</table>
+</body></html>
+`
+
+describe('parseWebPricing', () => {
+  it('parses the Chinese Search and Fetch rows', () => {
+    expect(parseWebPricing(PAGE_HTML_WEB_ZH, 'zh')).toEqual({ searchPerThousand: 5, fetchPerThousand: 5 })
+  })
+
+  it('parses the English Search and Fetch rows', () => {
+    expect(parseWebPricing(PAGE_HTML_WEB_EN, 'en')).toEqual({ searchPerThousand: 0.75, fetchPerThousand: 0.75 })
+  })
+
+  it('returns undefined when either row is absent', () => {
+    expect(parseWebPricing('<html><td>Search</td><td>5元</td></html>', 'zh')).toBeUndefined()
+  })
+
+  it('starts billing at 2026-11-01 00:00 Beijing', () => {
+    expect(WEB_BILLING_START_MS).toBe(Date.UTC(2026, 9, 31, 16, 0, 0))
+  })
+})

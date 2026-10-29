@@ -21,7 +21,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Domain } from '@deepseek-ai/dsh-storage-domain'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import { z } from 'zod'
-import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS, PEAK_SCHEDULE_EN, PEAK_SCHEDULE_ZH } from './pricing.ts'
+import { FALLBACK_CURRENT, FALLBACK_CURRENT_USD, FALLBACK_PEAK, FALLBACK_PEAK_USD, FALLBACK_WEB_CNY, FALLBACK_WEB_USD, fetchPricing, isPeakHour, PEAK_PRICING_START_MS, PEAK_SCHEDULE_EN, PEAK_SCHEDULE_ZH, WEB_BILLING_START_MS } from './pricing.ts'
 import { withHolidayCalendar, type HolidayOverrides } from './holidays.ts'
 import type {
   Currency,
@@ -37,6 +37,7 @@ import type {
   PriceBucket,
   PriceSource,
   PricingSnapshot,
+  WebPricing,
 } from './types.ts'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,6 +84,10 @@ const snapshotSchema = z.object({
   source: z.enum(['manual', 'official', 'fallback', 'openrouter', 'none']),
   usdCnyRate: z.number().nullable(),
   prices: z.record(z.string(), modelPriceSchema),
+  web: z.object({
+    searchPerThousand: z.number().nonnegative(),
+    fetchPerThousand: z.number().nonnegative(),
+  }).strict().optional(),
 }).strict()
 
 const fxSchema = z.object({
@@ -302,6 +307,7 @@ export function pricesEqual(
   left: Record<string, ModelPrice>,
   right: Record<string, ModelPrice>,
 ): boolean {
+  // (web prices are compared separately: they are page-level, not per-model)
   const keys = new Set([...Object.keys(left), ...Object.keys(right)])
   for (const key of keys) {
     const a = left[key]
@@ -310,6 +316,13 @@ export function pricesEqual(
     if (!modelPriceEqual(a, b)) return false
   }
   return true
+}
+
+/** Whether two Search / Fetch price pairs are equivalent (epsilon-compared). */
+export function webPricingEqual(left: WebPricing | undefined, right: WebPricing | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right
+  return Math.abs(left.searchPerThousand - right.searchPerThousand) < 1e-9
+    && Math.abs(left.fetchPerThousand - right.fetchPerThousand) < 1e-9
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -328,6 +341,8 @@ export interface OfficialPricingInput {
   schedule: PeakSchedule
   /** Fetch/parse failure reason; set when `current` is the fallback table. */
   error?: string
+  /** Search / Fetch API prices parsed from the page (or the built-in fallback). */
+  web?: WebPricing
 }
 
 /** Normalized OpenRouter input: USD per 1M tokens per model id. */
@@ -539,6 +554,7 @@ export function officialInputOf(snapshot: PricingSnapshot): OfficialPricingInput
     ...(snapshot.legacyCurrent === undefined ? {} : { legacyCurrent: snapshot.legacyCurrent }),
     ...(snapshot.peak === undefined ? {} : { peak: snapshot.peak }),
     schedule: snapshot.schedule,
+    ...(snapshot.web === undefined ? {} : { web: snapshot.web }),
     ...(snapshot.error === undefined ? {} : { error: snapshot.error }),
   }
 }
@@ -562,6 +578,20 @@ export interface PriceHit {
   source: PriceSource
   snapshotVersion: number
   snapshotEffectiveAt: number
+}
+
+/** Result of one Search / Fetch price lookup. */
+export interface WebPriceHit {
+  /** Search API price per 1,000 successful requests. */
+  searchPerThousand: number
+  /** Fetch API price per 1,000 successful requests. */
+  fetchPerThousand: number
+  /** Snapshot version the prices were anchored to; null before any snapshot. */
+  snapshotVersion: number | null
+  /** Epoch millis the anchored snapshot became effective. */
+  snapshotEffectiveAt: number | null
+  /** Whether the official billing window has started at the event time. */
+  billingStarted: boolean
 }
 
 /**
@@ -692,6 +722,31 @@ export class PricebookHandle {
     return null
   }
 
+  /** The fallback Search / Fetch list for this pricebook's currency. */
+  private webFallback(): WebPricing {
+    return this.currency === 'USD' ? FALLBACK_WEB_USD : FALLBACK_WEB_CNY
+  }
+
+  /**
+   * Resolve the Search / Fetch prices effective at one instant. The official
+   * page bills these standalone APIs per successful request; before
+   * {@link WEB_BILLING_START_MS} the cost is zero even though requests are
+   * still counted. Synchronous, like {@link priceFor}.
+   * @param time - the instant to price for.
+   * @returns the anchored prices and whether billing has started.
+   */
+  webPriceFor(time: number): WebPriceHit {
+    const snapshot = this.snapshotFor(time)
+    const web = snapshot?.web ?? this.webFallback()
+    return {
+      searchPerThousand: web.searchPerThousand,
+      fetchPerThousand: web.fetchPerThousand,
+      snapshotVersion: snapshot?.version ?? null,
+      snapshotEffectiveAt: snapshot?.effectiveAt ?? null,
+      billingStarted: time >= WEB_BILLING_START_MS,
+    }
+  }
+
   /** The effective USD→CNY rate under the current configuration. */
   private rate(): number {
     return effectiveRate(this.state.fx, this.config.defaultFxRate)
@@ -718,8 +773,9 @@ export class PricebookHandle {
       this.currency === 'USD' ? FALLBACK_PEAK_USD : FALLBACK_PEAK,
       this.currency,
     )
+    const web = this.lastOfficial.web ?? this.webFallback()
     const last = this.currentSnapshot()
-    if (last !== undefined && pricesEqual(last.prices, prices)) return
+    if (last !== undefined && pricesEqual(last.prices, prices) && webPricingEqual(last.web, web)) return
     const version = (last?.version ?? 0) + 1
     const snapshot: PricebookSnapshot = {
       version,
@@ -728,6 +784,7 @@ export class PricebookHandle {
       source: primarySource,
       usdCnyRate: this.rate(),
       prices,
+      web,
     }
     this.state = { ...this.state, snapshots: [...this.state.snapshots, snapshot], updatedAt: now }
     this.capSnapshots()
@@ -904,5 +961,3 @@ export class PricebookHandle {
     }
   }
 }
-
-

@@ -172,6 +172,12 @@ export const AssistantCostChip = memo(function AssistantCostChip({ messageId, us
             <dd>{money(priced.reduce((sum, entry) => sum + entry.cacheReadCost, 0))}</dd>
             <dt>{t('view.output')}</dt>
             <dd>{money(priced.reduce((sum, entry) => sum + entry.outputCost, 0))}</dd>
+            {priced.some(entry => (entry.webCost ?? 0) > 0 || (entry.searchRequests ?? 0) + (entry.fetchRequests ?? 0) > 0) && (
+              <>
+                <dt>{t('view.web')}</dt>
+                <dd>{money(priced.reduce((sum, entry) => sum + (entry.webCost ?? 0), 0))}</dd>
+              </>
+            )}
             <dt>{t('chip.detail.band')}</dt>
             <dd>{bandLabel ?? t('band.single')}</dd>
             <dt>{t('chip.detail.model')}</dt>

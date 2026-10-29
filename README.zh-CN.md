@@ -1,4 +1,5 @@
 <h1 align="center">DSH Cost Meter（对话花费计量）</h1>
+<p align="center"><img src="docs/assets/banner-cost-meter.svg" alt="DSH Cost Meter banner" width="100%"/></p>
 
 <p align="center">
   <a href="./README.md">English</a>
@@ -6,7 +7,7 @@
   <strong>简体中文</strong>
 </p>
 
-**DSH Cost Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。
+**DSH Cost Meter** 是为 DeepSeek Harness（DSH）Web GUI 打造的对话成本追踪插件——**价格快照锚定**的逐轮成本（感知**峰值/闲时**）、**账户余额**、**花费标签页**、**每条回复成本小标签**，以及带**流式实时估算**的**头部胶囊**。每一步的成本、价格档位与快照版本都**只计算一次**——锚定到该用量事件自身时刻生效的价格快照，此后永不重算——因此后续价格变动绝不会改写已写入的对话记录。Search 与 Fetch 是独立的按成功请求计费 API，账本也会统计这些调用，并按官方每 1,000 次 ¥5 / US$0.75 计价——按官方页面说明，2026-11-01 00:00（北京时间）前免费。
 
 - Host 半区（`src/`）：DeepSeek `GET /user/balance` 余额查询、持久化的快照锚定价格簿、`sessionCost` 投影与不读价格簿的 `sessionCostIndex` 消息索引、子代理成本聚合，以及带信任围栏的 `/cost-meter` 路由。
 - Client 半区（`src/client/`）：输入框下方读数、花费标签页、每条回复成本小标签、头部胶囊，以及插件配置页（设置 → 插件）——内置简体中文与英文。
@@ -23,7 +24,7 @@
 npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 ```
 
-上面装的是 npm 的 `latest` 标签，它跟随当前 DSH 发布线。本插件与 DSH 使用同样的两条 npm 通道，而每个构建只能在它对应的那条 DSH 发布线上运行，因此请按你的运行时选择通道：
+上面装的是 npm 的 `latest` 标签，它跟随当前 DSH 发布线。本插件与 DSH 使用同样的三条 npm 通道（`latest`、`next`、`alpha`），而每个构建只能在它对应的那条 DSH 发布线上运行，因此请按你的运行时选择通道：
 
 | npm dist-tag | 对应 | 安装命令 |
 | --- | --- | --- |
@@ -120,13 +121,13 @@ pnpm build       # tsc -b && tsdown（lib/ + lib/client.js）
 
 ### 发布通道
 
-推送 `v*` 标签后由 `.github/workflows/publish.yml` 发布。标签决定 npm dist-tag，而这不只是记账问题：社区市场安装的是**不带版本号的包名**，也就是 `latest` 指向的那个版本，直接装进访客的运行时。DSH 同时并行两条发布线（`@deepseek-ai/dsh` 把当前线放在 `latest`、把下一条线放在 `next`），而插件版本只能在它的 `@deepseek-ai/dsh*` 对等依赖所接受的那条线上运行，因此 `scripts/dist-tag.mjs` 会用这些依赖范围去比对 registry 上 DSH 自己的发布线，据此选定通道：
+推送 `v*` 标签后由 `.github/workflows/publish.yml` 发布。标签决定 npm dist-tag，而这不只是记账问题：社区市场安装的是**不带版本号的包名**，也就是 `latest` 指向的那个版本，直接装进访客的运行时。DSH 同时并行三条发布线（`@deepseek-ai/dsh` 把当前线放在 `latest`、下一条线放在 `next`、alpha 线放在 `alpha`），而插件版本只能在它的 `@deepseek-ai/dsh*` 对等依赖所接受的那条线上运行，因此 `scripts/dist-tag.mjs` 会用这些依赖范围去比对 registry 上 DSH 自己的发布线，据此选定通道：
 
 | 版本 | 通道 |
 |---|---|
 | 接受 DSH `latest` 线 | `latest` |
-| 只接受 DSH `next` 线 | `next` |
-| 带 `-` 先行版本后缀 | `alpha` |
+| 接受 DSH `next` 线（或带 `-next.` 后缀） | `next` |
+| 带 `-alpha.` 先行版本后缀 | `alpha` |
 
 `node scripts/dist-tag.mjs pairs` 会打印所有已发布版本的归属表；`node scripts/dist-tag.mjs reconcile` 会把每个标签重新指向支持它的最新版本，同时修正早期发布流程写错的标签（`.github/workflows/dist-tags.yml` 可按需单独执行同一套 reconcile）。
 

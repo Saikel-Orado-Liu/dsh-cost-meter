@@ -22,7 +22,7 @@
  * @module @gamegeek-saikel/dsh-cost-meter/pricing
  */
 
-import type { CurrentPricing, PeakHourRange, PeakModelPricing, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot } from './types.ts'
+import type { CurrentPricing, PeakHourRange, PeakModelPricing, PeakPricing, PeakSchedule, PriceBucket, PricingSnapshot, WebPricing } from './types.ts'
 import { beijingDateKey, calendarsOf, withHolidayCalendar } from './holidays.ts'
 
 /** Official pricing page URL (zh-cn). */
@@ -113,6 +113,58 @@ export const FALLBACK_PEAK_USD: PeakPricing = {
     offPeak: { ...FALLBACK_CURRENT_USD.pro },
     peak: { cacheReadPerMillion: 0.044, inputPerMillion: 1.32, outputPerMillion: 3.96 },
   },
+}
+
+/**
+ * Built-in fallback for the Search / Fetch API list (CNY per 1,000 successful
+ * requests): the 2026-10-30 official page lists 5元 each. The page bills these
+ * standalone APIs per successful request, and the current grace period ends at
+ * 2026-11-01 00:00 Beijing.
+ */
+export const FALLBACK_WEB_CNY: WebPricing = {
+  searchPerThousand: 5,
+  fetchPerThousand: 5,
+}
+
+/** Built-in fallback for the Search / Fetch API list (USD per 1,000 requests). */
+export const FALLBACK_WEB_USD: WebPricing = {
+  searchPerThousand: 0.75,
+  fetchPerThousand: 0.75,
+}
+
+/**
+ * Official Search / Fetch billing start: 2026-11-01 00:00 Beijing (UTC+8).
+ * Before this instant the official page states the calls are free; the plugin
+ * still counts them, priced at zero, so the ledger shows the requests.
+ */
+export const WEB_BILLING_START_MS = Date.UTC(2026, 9, 31, 16, 0, 0)
+
+/** Chinese Search row: `Search 每 1,000 次成功请求 5元` (table cell order may vary). */
+const ZH_WEB_SEARCH_RE = /Search\s+每\s*1[,，]?000\s*次成功请求\s+(\d+(?:\.\d+)?)\s*元/i
+/** Chinese Fetch row. */
+const ZH_WEB_FETCH_RE = /Fetch\s+每\s*1[,，]?000\s*次成功请求\s+(\d+(?:\.\d+)?)\s*元/i
+/** English Search row: `Search Per 1,000 successful requests $0.75`. */
+const EN_WEB_SEARCH_RE = /Search\s+Per\s+1[,，]?000\s+successful\s+requests\s+\$\s*(\d+(?:\.\d+)?)/i
+/** English Fetch row. */
+const EN_WEB_FETCH_RE = /Fetch\s+Per\s+1[,，]?000\s+successful\s+requests\s+\$\s*(\d+(?:\.\d+)?)/i
+
+/**
+ * Parse the Search / Fetch price table from an official pricing page. The
+ * table lives below the token table and is independent of the model columns;
+ * the parser tolerates the localized wording around the two price cells.
+ * @param html - the raw pricing page.
+ * @param locale - which page's wording to look for.
+ * @returns the parsed prices, or undefined when either row is absent.
+ */
+export function parseWebPricing(html: string, locale: 'zh' | 'en' = 'zh'): WebPricing | undefined {
+  const text = stripHtml(html)
+  const search = (locale === 'en' ? EN_WEB_SEARCH_RE : ZH_WEB_SEARCH_RE).exec(text)
+  const fetch = (locale === 'en' ? EN_WEB_FETCH_RE : ZH_WEB_FETCH_RE).exec(text)
+  if (search === null || fetch === null) return undefined
+  const searchPerThousand = Number(search[1])
+  const fetchPerThousand = Number(fetch[1])
+  if (!Number.isFinite(searchPerThousand) || !Number.isFinite(fetchPerThousand)) return undefined
+  return { searchPerThousand, fetchPerThousand }
 }
 
 /** Strip HTML tags to plain text (keeps cell order). */
@@ -457,6 +509,7 @@ export async function fetchPricing(
   const fallbackCurrent = locale === 'en' ? FALLBACK_CURRENT_USD : FALLBACK_CURRENT
   const fallbackPeak = locale === 'en' ? FALLBACK_PEAK_USD : FALLBACK_PEAK
   const fallbackSchedule = locale === 'en' ? PEAK_SCHEDULE_EN : PEAK_SCHEDULE_ZH
+  const fallbackWeb = locale === 'en' ? FALLBACK_WEB_USD : FALLBACK_WEB_CNY
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -467,16 +520,17 @@ export async function fetchPricing(
       clearTimeout(timer)
     }
     if (!response.ok) {
-      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: `pricing page HTTP ${response.status}` }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, web: fallbackWeb, error: `pricing page HTTP ${response.status}` }
     }
     const html = await response.text()
     const parsed = locale === 'en' ? parseEnglishPricing(html) : parseZhPricing(html)
     if (parsed === undefined) {
-      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, error: 'pricing table not found' }
+      return { fetchedAt, currency, current: fallbackCurrent, peakActive: false, effective: fallbackCurrent, schedule: fallbackSchedule, web: fallbackWeb, error: 'pricing table not found' }
     }
     const peak = parsed.peak ?? (locale === 'en' ? parsePeakTableEn(html) : parsePeakTable(html))
     const { current, legacyCurrent } = parsed
     const schedule = parsePeakSchedule(html, locale) ?? fallbackSchedule
+    const web = parseWebPricing(html, locale) ?? fallbackWeb
     const now = Date.now()
     const peakActive = now >= PEAK_PRICING_START_MS
     return {
@@ -489,6 +543,7 @@ export async function fetchPricing(
       effective: effectivePricing(current, peak, peakActive, new Date(now), schedule),
       ...(peakActive ? { band: isPeakHour(new Date(now), schedule) ? 'peak' : 'offPeak' } : {}),
       schedule,
+      web,
     }
   } catch (error) {
     return {
@@ -498,6 +553,7 @@ export async function fetchPricing(
       peakActive: false,
       effective: fallbackCurrent,
       schedule: fallbackSchedule,
+      web: fallbackWeb,
       error: error instanceof Error ? error.message : String(error)
     }
   }

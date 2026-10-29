@@ -186,6 +186,14 @@ export const SessionCostPill = memo(function SessionCostPill({ useSession, usePr
               <div className={css.detailRow + ' ' + css.detailRowSecondary}>{t('view.uncached')}: {symbol}{formatMoney(combined.uncachedCost)}</div>
               <div className={css.detailRow + ' ' + css.detailRowSecondary}>{t('view.cacheRead')}: {symbol}{formatMoney(combined.cacheReadCost)}</div>
               <div className={css.detailRow + ' ' + css.detailRowSecondary}>{t('view.output')}: {symbol}{formatMoney(combined.outputCost)}</div>
+              {((combined.webCost ?? 0) > 0 || (combined.searchRequests ?? 0) + (combined.fetchRequests ?? 0) > 0) && (
+                <div className={css.detailRow + ' ' + css.detailRowSecondary}>
+                  {t('view.web')}: {symbol}{formatMoney(combined.webCost ?? 0)} · {t('web.requests', {
+                    search: String(combined.searchRequests ?? 0),
+                    fetch: String(combined.fetchRequests ?? 0),
+                  })}
+                </div>
+              )}
             </>
           )}
           {subSpend > 0 && (

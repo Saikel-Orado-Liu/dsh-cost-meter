@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="360" viewBox="0 0 1600 360" role="img" aria-labelledby="title desc">
+  <title id="title">DSH Cost Meter</title>
+  <desc id="desc">Snapshot-anchored cost tracking for DeepSeek Harness, including peak and off-peak pricing plus Search and Fetch billing.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070d18"/>
+      <stop offset="0.55" stop-color="#0c1a2c"/>
+      <stop offset="1" stop-color="#12314a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#48e0b0"/>
+      <stop offset="1" stop-color="#59b8ff"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#59b8ff" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#59b8ff" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" fill="none" stroke="#7fb6d9" stroke-opacity="0.10" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="360" rx="28" fill="url(#bg)"/>
+  <rect width="1600" height="360" rx="28" fill="url(#grid)"/>
+  <rect x="1" y="1" width="1598" height="358" rx="27" fill="none" stroke="#8fc9e8" stroke-opacity="0.18"/>
+  <ellipse cx="1370" cy="150" rx="250" ry="180" fill="url(#glow)"/>
+  <g font-family="Inter, 'Segoe UI', 'Noto Sans SC', sans-serif">
+    <text x="92" y="94" fill="#6fd7c2" font-size="18" font-weight="700" letter-spacing="5">DEEPSEEK HARNESS PLUGIN</text>
+    <text x="90" y="178" fill="#f4fbff" font-size="70" font-weight="800" letter-spacing="-1">DSH Cost Meter</text>
+    <text x="94" y="230" fill="#a9c6d8" font-size="25">Snapshot-anchored cost · peak / off-peak · balance</text>
+    <text x="94" y="272" fill="#7e9fb4" font-size="21">Now with Search &amp; Fetch API billing at ¥5 / 1,000 requests</text>
+    <g transform="translate(96 300)">
+      <rect width="172" height="34" rx="17" fill="#48e0b0" fill-opacity="0.13" stroke="#48e0b0" stroke-opacity="0.45"/>
+      <text x="18" y="23" fill="#7ff0cf" font-size="15" font-weight="600">per-turn ledger</text>
+      <rect x="190" width="142" height="34" rx="17" fill="#59b8ff" fill-opacity="0.12" stroke="#59b8ff" stroke-opacity="0.4"/>
+      <text x="208" y="23" fill="#9fd4ff" font-size="15" font-weight="600">CNY · USD</text>
+      <rect x="350" width="176" height="34" rx="17" fill="#f7c96b" fill-opacity="0.12" stroke="#f7c96b" stroke-opacity="0.4"/>
+      <text x="368" y="23" fill="#ffd98a" font-size="15" font-weight="600">2026-11-01 billing</text>
+    </g>
+  </g>
+  <g transform="translate(1040 58)">
+    <rect x="0" y="0" width="470" height="250" rx="22" fill="#07121f" fill-opacity="0.72" stroke="#9dd7f2" stroke-opacity="0.18"/>
+    <text x="34" y="46" fill="#7e9fb4" font-size="15" font-weight="600" letter-spacing="2">SESSION COST</text>
+    <text x="34" y="102" fill="#f4fbff" font-size="46" font-weight="800">¥ 0.0154</text>
+    <text x="34" y="130" fill="#6fd7c2" font-size="15">+ Search 2 × ¥0.005 · Fetch 1 × ¥0.005</text>
+    <path d="M34 176 H436" stroke="#9dd7f2" stroke-opacity="0.16"/>
+    <g fill="url(#accent)">
+      <rect x="34" y="206" width="26" height="24" rx="6" opacity="0.5"/>
+      <rect x="72" y="194" width="26" height="36" rx="6" opacity="0.62"/>
+      <rect x="110" y="186" width="26" height="44" rx="6" opacity="0.72"/>
+      <rect x="148" y="170" width="26" height="60" rx="6" opacity="0.82"/>
+      <rect x="186" y="160" width="26" height="70" rx="6" opacity="0.9"/>
+      <rect x="224" y="148" width="26" height="82" rx="6"/>
+      <rect x="262" y="166" width="26" height="64" rx="6" opacity="0.72"/>
+      <rect x="300" y="154" width="26" height="76" rx="6" opacity="0.86"/>
+      <rect x="338" y="142" width="26" height="88" rx="6"/>
+      <rect x="376" y="156" width="26" height="74" rx="6" opacity="0.8"/>
+    </g>
+    <text x="34" y="252" fill="#7e9fb4" font-size="13">anchor: snapshot v3 · peak band · 2026-11-02 10:00</text>
+  </g>
+</svg>

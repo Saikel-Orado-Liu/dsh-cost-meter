@@ -81,6 +81,18 @@ export interface PriceBucket {
   outputPerMillion: number
 }
 
+/**
+ * DeepSeek Search / Fetch API prices: per 1,000 successful requests. The
+ * official page bills these independently of token usage, and charges nothing
+ * before 2026-11-01 00:00 Beijing (the page states the grace period).
+ */
+export interface WebPricing {
+  /** Search API price per 1,000 successful requests. */
+  searchPerThousand: number
+  /** Fetch API price per 1,000 successful requests. */
+  fetchPerThousand: number
+}
+
 /** One model's price set under the current (pre-rollout) official list. */
 export interface CurrentPricing {
   /** Flash-model prices (`deepseek-flash`). */
@@ -178,6 +190,8 @@ export interface PricingSnapshot {
   schedule: PeakSchedule
   /** Fetch/parse failure reason; absent while the official page parsed cleanly. */
   error?: string
+  /** Search/Fetch API prices parsed from the page (or the locale fallback). */
+  web?: WebPricing
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -229,6 +243,8 @@ export interface PricebookSnapshot {
   usdCnyRate: number | null
   /** Per canonical model key (`provider/model`, bare model, or pricing key). */
   prices: Record<string, ModelPrice>
+  /** Search / Fetch API prices effective at this snapshot; absent on pre-0.6 snapshots. */
+  web?: WebPricing
 }
 
 /** USD→CNY exchange configuration. */
@@ -358,6 +374,12 @@ export interface SessionCostStep {
   snapshotEffectiveAt: number | null
   /** Band that priced this step. */
   band: PriceBand | null
+  /** Search/Fetch cost folded into `cost` (0 before the 2026-11-01 billing start). */
+  webCost?: number
+  /** Successful Search API requests billed in this step. */
+  searchRequests?: number
+  /** Successful Fetch API requests billed in this step. */
+  fetchRequests?: number
 }
 
 /** Cumulative per-category totals across every priced step. */
@@ -376,6 +398,12 @@ export interface SessionCostTotals {
   unpricedSteps: number
   /** Total number of steps with usage. */
   steps: number
+  /** Sum of Search/Fetch costs. */
+  webCost?: number
+  /** Successful Search API requests across the session. */
+  searchRequests?: number
+  /** Successful Fetch API requests across the session. */
+  fetchRequests?: number
 }
 
 /**
@@ -390,6 +418,17 @@ export interface SessionCostProjection {
   steps: SessionCostStep[]
   /** Cumulative totals. */
   totals: SessionCostTotals
+  /**
+   * Search/Fetch billing summary. `billingStarted` is false during the
+   * official grace period (before 2026-11-01 00:00 Beijing), when requests
+   * are counted but priced at zero.
+   */
+  web?: {
+    searchRequests: number
+    fetchRequests: number
+    cost: number
+    billingStarted: boolean
+  }
 }
 
 /** One subagent session's anchored cost totals, aggregated host-side. */

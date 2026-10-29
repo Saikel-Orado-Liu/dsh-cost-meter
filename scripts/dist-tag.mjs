@@ -144,9 +144,16 @@ function dshLines() {
     .map(line => [line, tags[line]]))
 }
 
-/** The dist-tag one version belongs on, or null when no DSH line accepts it. */
+/**
+ * The dist-tag one version belongs on, or null when no DSH line accepts it.
+ * A `-next.` prerelease belongs on the next channel (the branch that tracks
+ * DSH's upcoming line); every other prerelease is an alpha build.
+ */
 function tagOf(manifest, lines) {
-  if (semver.prerelease(manifest.version) !== null) return PRERELEASE_TAG
+  const prerelease = semver.prerelease(manifest.version)
+  if (prerelease !== null) {
+    return prerelease.some(part => String(part).toLowerCase() === 'next') ? 'next' : PRERELEASE_TAG
+  }
   const peers = dshPeers(manifest)
   for (const line of LINES) {
     const runtime = lines[line]

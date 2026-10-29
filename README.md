@@ -1,4 +1,5 @@
 <h1 align="center">DSH Cost Meter</h1>
+<p align="center"><img src="docs/assets/banner-cost-meter.svg" alt="DSH Cost Meter banner" width="100%"/></p>
 
 <p align="center">
   <strong>English</strong>
@@ -6,7 +7,7 @@
   <a href="./README.zh-CN.md">简体中文</a>
 </p>
 
-**DSH Cost Meter** is a DeepSeek conversation cost-tracking plugin for the DeepSeek Harness (DSH) Web GUI — **price-snapshot-anchored per-turn cost** (peak/off-peak aware), **account balance**, a **cost view tab**, **per-message cost chips**, and a **header pill with live streaming estimates**. Every step's cost, price band, and snapshot version are computed *once* from the pricebook snapshot effective at the usage event's own time and then never recomputed — a later price change never rewrites an already-written conversation row.
+**DSH Cost Meter** is a DeepSeek conversation cost-tracking plugin for the DeepSeek Harness (DSH) Web GUI — **price-snapshot-anchored per-turn cost** (peak/off-peak aware), **account balance**, a **cost view tab**, **per-message cost chips**, and a **header pill with live streaming estimates**. Every step's cost, price band, and snapshot version are computed *once* from the pricebook snapshot effective at the usage event's own time and then never recomputed — a later price change never rewrites an already-written conversation row. Search and Fetch are standalone APIs billed per successful request, so the ledger also counts those calls and prices them at the official ¥5 / US$0.75 per 1,000 requests — free until 2026-11-01 00:00 Beijing, as the pricing page states.
 
 - Host half (`src/`): DeepSeek `GET /user/balance` query, the persisted snapshot-anchored pricebook, the `sessionCost` projection plus the pricebook-free `sessionCostIndex` message index, subagent cost aggregation, and the trust-fenced `/cost-meter` route.
 - Client half (`src/client/`): composer-dock readout, Cost tab, per-reply chip, header pill, and the plugin configuration card — in Simplified Chinese and English.
@@ -23,7 +24,7 @@ Install it into a web profile with the official DSH CLI (via npx — no global i
 npx @deepseek-ai/dsh plugin --profile web add @gamegeek-saikel/dsh-cost-meter
 ```
 
-That installs the npm `latest` tag, which tracks the current DSH release line. This plugin publishes on the same two npm channels DSH itself uses, and a build only runs on the DSH line it was built for, so install the channel that matches your runtime:
+That installs the npm `latest` tag, which tracks the current DSH release line. This plugin publishes on the same three npm channels (`latest`, `next`, `alpha`) DSH itself uses, and a build only runs on the DSH line it was built for, so install the channel that matches your runtime:
 
 | npm dist-tag | Tracks | Install command |
 | --- | --- | --- |
@@ -120,13 +121,13 @@ The test suites are fully offline: pricing-page HTML, OpenRouter models, and the
 
 ### Release channels
 
-A `v*` tag push publishes through `.github/workflows/publish.yml`. The tag decides the npm dist-tag, and that choice matters beyond bookkeeping: the community market installs the bare package name — whatever `latest` names — into a visitor's runtime. DSH ships two release lines at once (`@deepseek-ai/dsh` names the current one under `latest` and the upcoming one under `next`), and a plugin version only runs on the line its `@deepseek-ai/dsh*` peer ranges accept, so `scripts/dist-tag.mjs` reads those ranges against the registry's own DSH lines and picks the channel:
+A `v*` tag push publishes through `.github/workflows/publish.yml`. The tag decides the npm dist-tag, and that choice matters beyond bookkeeping: the community market installs the bare package name — whatever `latest` names — into a visitor's runtime. DSH ships three release lines at once (`@deepseek-ai/dsh` names the current line under `latest`, the upcoming one under `next`, and the alpha line under `alpha`), and a plugin version only runs on the line its `@deepseek-ai/dsh*` peer ranges accept, so `scripts/dist-tag.mjs` reads those ranges against the registry's own DSH lines and picks the channel:
 
 | Version | Channel |
 |---|---|
 | accepts the DSH `latest` line | `latest` |
-| accepts only the DSH `next` line | `next` |
-| carries a `-` prerelease suffix | `alpha` |
+| accepts the DSH `next` line (or carries a `-next.` suffix) | `next` |
+| carries an `-alpha.` prerelease suffix | `alpha` |
 
 `node scripts/dist-tag.mjs pairs` prints that table for every published version; `node scripts/dist-tag.mjs reconcile` re-points each tag at the newest version supporting it, which also repairs a tag an earlier release process set wrong (`.github/workflows/dist-tags.yml` runs the same reconcile on demand).
 

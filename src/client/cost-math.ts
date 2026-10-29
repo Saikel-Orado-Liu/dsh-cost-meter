@@ -32,6 +32,9 @@ export function sumTotals(totals: readonly SessionCostTotals[]): SessionCostTota
     pricedSteps: 0,
     unpricedSteps: 0,
     steps: 0,
+    webCost: 0,
+    searchRequests: 0,
+    fetchRequests: 0,
   }
   for (const entry of totals) {
     sum.uncachedCost += entry.uncachedCost
@@ -41,6 +44,9 @@ export function sumTotals(totals: readonly SessionCostTotals[]): SessionCostTota
     sum.pricedSteps += entry.pricedSteps
     sum.unpricedSteps += entry.unpricedSteps
     sum.steps += entry.steps
+    sum.webCost = (sum.webCost ?? 0) + (entry.webCost ?? 0)
+    sum.searchRequests = (sum.searchRequests ?? 0) + (entry.searchRequests ?? 0)
+    sum.fetchRequests = (sum.fetchRequests ?? 0) + (entry.fetchRequests ?? 0)
   }
   return sum
 }

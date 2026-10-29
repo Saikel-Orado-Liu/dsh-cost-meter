@@ -29,8 +29,8 @@ const flashPrices: Record<string, ModelPrice> = {
   },
 }
 
-function snapshotFixture(version: number, effectiveAt: number): PricebookSnapshot {
-  return { version, currency: 'CNY', effectiveAt, source: 'official', usdCnyRate: null, prices: { ...flashPrices } }
+function snapshotFixture(version: number, effectiveAt: number, web = { searchPerThousand: 5, fetchPerThousand: 5 }): PricebookSnapshot {
+  return { version, currency: 'CNY', effectiveAt, source: 'official', usdCnyRate: null, prices: { ...flashPrices }, web }
 }
 
 function handleWith(snapshots: PricebookSnapshot[]): PricebookHandle {
@@ -43,10 +43,36 @@ function handleWith(snapshots: PricebookSnapshot[]): PricebookHandle {
   }, { ...initialPricebookState(), snapshots })
 }
 
-const init = (): SessionCostState => ({ model: null, steps: {}, totals: { uncachedCost: 0, cacheReadCost: 0, outputCost: 0, cost: 0, pricedSteps: 0, unpricedSteps: 0, steps: 0 } })
+const init = (): SessionCostState => ({
+  model: null,
+  steps: {},
+  totals: { uncachedCost: 0, cacheReadCost: 0, outputCost: 0, cost: 0, pricedSteps: 0, unpricedSteps: 0, steps: 0, webCost: 0, searchRequests: 0, fetchRequests: 0 },
+  pendingWeb: {},
+  callRoots: {},
+  lastCoords: null,
+  webBillingStarted: false,
+})
 
 function event(type: string, time: number, data: Record<string, unknown>): SessionEvent {
   return { type, seq: 0, time, data } as unknown as SessionEvent
+}
+
+
+/** 2026-11-02 10:00 Beijing: after the Search/Fetch billing start. */
+const POST_WEB_BILLING = Date.UTC(2026, 10, 2, 2, 0, 0)
+/** 2026-10-30 10:00 Beijing: inside the official grace period. */
+const PRE_WEB_BILLING = Date.UTC(2026, 9, 30, 2, 0, 0)
+
+function toolCall(time: number, turn: number, step: number, callId: string, name: string, args: unknown): SessionEvent {
+  return event('tool/call', time, { turn, step, callId, name, arguments: JSON.stringify(args) })
+}
+
+function toolResult(time: number, turn: number, step: number, callId: string, isError = false): SessionEvent {
+  return event('tool/result', time, { turn, step, message: { role: 'tool', toolCallId: callId, isError, content: [] } })
+}
+
+function ptcDispatch(time: number, rootCallId: string, name: string, args: unknown, isError = false): SessionEvent {
+  return event('tool/ptc-dispatch', time, { rootCallId, parentCallId: rootCallId, subCallId: `${rootCallId}:ptc:1`, name, arguments: args, isError, content: [] })
 }
 
 function headerEvent(time: number, model = 'deepseek-v4-flash', provider = 'deepseek-official'): SessionEvent {
@@ -205,5 +231,95 @@ describe('foldSessionCost pricing and anchoring', () => {
     expect(view.steps.map(step => step.turn)).toEqual([1, 2])
     expect(view.totals.cost).toBeCloseTo(6)
     expect(view.totals.steps).toBe(2)
+  })
+})
+describe('Search / Fetch billing', () => {
+  it('counts successful Search requests and prices them after the billing start', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 1, 1, 'c1', 'web_search', { queries: ['a', 'b', 'a'] }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 10, 1, 1, 'c1'), handle)
+    const view = viewSessionCost(state)
+    expect(view.web).toMatchObject({ searchRequests: 2, fetchRequests: 0, billingStarted: true })
+    // 2 requests × 5元 / 1000
+    expect(view.web?.cost).toBeCloseTo(0.01)
+    expect(view.totals.webCost).toBeCloseTo(0.01)
+    expect(view.totals.cost).toBeCloseTo(0.01)
+    expect(view.steps).toHaveLength(1)
+    expect(view.steps[0].searchRequests).toBe(2)
+  })
+
+  it('counts Fetch requests at the same per-request rate', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 1, 1, 'c1', 'web_fetch', { url: 'https://example.com' }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 10, 1, 1, 'c1'), handle)
+    expect(viewSessionCost(state).web).toMatchObject({ searchRequests: 0, fetchRequests: 1, cost: 0.005 })
+  })
+
+  it('counts requests during the grace period but prices them at zero', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(PRE_WEB_BILLING, 1, 1, 'c1', 'web_search', { queries: ['a'] }), handle)
+    state = foldSessionCost(state, toolResult(PRE_WEB_BILLING + 10, 1, 1, 'c1'), handle)
+    const view = viewSessionCost(state)
+    expect(view.web).toMatchObject({ searchRequests: 1, cost: 0, billingStarted: false })
+    expect(view.totals.cost).toBe(0)
+  })
+
+  it('never bills a failed call', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 1, 1, 'c1', 'web_search', { queries: ['a'] }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 10, 1, 1, 'c1', true), handle)
+    expect(viewSessionCost(state).web).toMatchObject({ searchRequests: 0, cost: 0 })
+  })
+
+  it('attributes a PTC web sub-call to its root tool step', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 2, 3, 'root', 'run_code', {}), handle)
+    state = foldSessionCost(state, ptcDispatch(POST_WEB_BILLING + 10, 'root', 'web_fetch', { url: 'https://example.com' }), handle)
+    const view = viewSessionCost(state)
+    expect(view.steps[0]).toMatchObject({ turn: 2, step: 3, fetchRequests: 1 })
+    expect(view.web?.cost).toBeCloseTo(0.005)
+  })
+
+  it('anchors web prices to the snapshot effective at the call time', () => {
+    const handle = handleWith([snapshotFixture(1, 0, { searchPerThousand: 5, fetchPerThousand: 5 })])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 1, 1, 'c1', 'web_search', { queries: ['a'] }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 10, 1, 1, 'c1'), handle)
+    const before = viewSessionCost(state).steps[0]
+    handle.state = {
+      ...handle.state,
+      snapshots: [...handle.state.snapshots, snapshotFixture(2, POST_WEB_BILLING + 1_000, { searchPerThousand: 50, fetchPerThousand: 50 })],
+    }
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING + 2_000, 1, 2, 'c2', 'web_search', { queries: ['a'] }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 2_010, 1, 2, 'c2'), handle)
+    const view = viewSessionCost(state)
+    expect(view.steps[0]).toEqual(before)
+    expect(view.steps[1].cost).toBeCloseTo(0.05)
+  })
+
+  it('adds web cost to a token step without disturbing its token buckets', () => {
+    const handle = handleWith([snapshotFixture(1, 0)])
+    let state = init()
+    state = foldSessionCost(state, headerEvent(1_000), handle)
+    state = foldSessionCost(state, usageEvent(POST_WEB_BILLING, 1, 1, { inputTokens: 1_000_000, outputTokens: 1_000_000 }), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING + 10, 1, 1, 'c1', 'web_fetch', { url: 'https://example.com' }), handle)
+    state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 20, 1, 1, 'c1'), handle)
+    const step = viewSessionCost(state).steps[0]
+    // 10:00 Beijing is peak: 1M × 2 + 1M × 8 = 10; plus one Fetch request 0.005
+    expect(step.cost).toBeCloseTo(10.005)
+    expect(step.webCost).toBeCloseTo(0.005)
+    expect(step.uncachedInputTokens).toBe(1_000_000)
+    expect(state.totals.cost).toBeCloseTo(10.005)
   })
 })

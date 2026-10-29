@@ -73,6 +73,13 @@ export function costDetail(cost: SessionCostProjection | undefined, model: strin
       rows.push(t('view.uncached') + ` ${symbol}${formatMoney(totals.uncachedCost)}`)
       rows.push(t('view.cacheRead') + ` ${symbol}${formatMoney(totals.cacheReadCost)}`)
       rows.push(t('view.output') + ` ${symbol}${formatMoney(totals.outputCost)}`)
+      if ((totals.webCost ?? 0) > 0 || (totals.searchRequests ?? 0) + (totals.fetchRequests ?? 0) > 0) {
+        rows.push(t('line.web', { amount: `${symbol}${formatMoney(totals.webCost ?? 0)}` }))
+        rows.push(t('web.requests', {
+          search: String(totals.searchRequests ?? 0),
+          fetch: String(totals.fetchRequests ?? 0),
+        }))
+      }
     }
     if (model !== undefined) rows.push(t('step.model', { model }))
     const steps = cost.steps
@@ -211,6 +218,12 @@ export const SessionCostLine = memo(function SessionCostLine({ useProjection, se
         row('uncached', t('dock.row.uncached'), money(combined.uncachedCost))
         row('cacheRead', t('dock.row.cacheRead'), money(combined.cacheReadCost))
         row('output', t('dock.row.output'), money(combined.outputCost))
+        if ((combined.webCost ?? 0) > 0 || (combined.searchRequests ?? 0) + (combined.fetchRequests ?? 0) > 0) {
+          row('web', t('dock.row.web'), `${money(combined.webCost ?? 0)} · ${t('web.requests', {
+            search: String(combined.searchRequests ?? 0),
+            fetch: String(combined.fetchRequests ?? 0),
+          })}`)
+        }
       }
       // One row per subagent, depth-tagged: the same tree the Cost tab lists.
       for (const subagent of subagents) {
