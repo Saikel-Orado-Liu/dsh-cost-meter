@@ -25,7 +25,7 @@
  *
  * Usage:
  *   node scripts/dist-tag.mjs resolve
- *   node scripts/dist-tag.mjs reconcile [--dry-run]
+ *   node scripts/dist-tag.mjs reconcile [--dry-run] [--wait-for <version>]
  *   node scripts/dist-tag.mjs pairs
  *   node scripts/dist-tag.mjs whoami
  */
@@ -59,8 +59,8 @@ function npm(args) {
 }
 
 /** Run npm with --json and parse the answer, tolerating leading notices. */
-function npmJson(args) {
-  const text = npm([...args, '--json'])
+function npmJson(args, online = false) {
+  const text = npm([...args, ...(online ? ['--prefer-online'] : []), '--json'])
   const start = text.search(/[[{]/)
   if (start < 0) throw new Error(`npm ${args.join(' ')} returned no JSON: ${text}`)
   return JSON.parse(text.slice(start))
@@ -163,20 +163,42 @@ function tagOf(manifest, lines) {
 }
 
 /** Every published version of the package, in registry order. */
-function publishedVersions(name) {
-  const versions = npmJson(['view', name, 'versions'])
+function publishedVersions(name, online = false) {
+  const versions = npmJson(['view', name, 'versions'], online)
   return Array.isArray(versions) ? versions : [versions]
 }
 
+/**
+ * Wait until the registry reports a just-published version. npm publish
+ * returns before the package is readable through the packument, so a
+ * reconcile started immediately after publish can otherwise tag the OLD
+ * newest version as latest. `--prefer-online` bypasses npm's metadata cache.
+ * @param name - package name.
+ * @param version - version the publish just added.
+ * @param timeoutMs - maximum wait.
+ * @throws when the version never appears.
+ */
+async function waitForPublishedVersion(name, version, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    if (publishedVersions(name, true).includes(version)) return
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for ${name}@${version} to appear on the registry`)
+    await new Promise(resolve => setTimeout(resolve, 5_000))
+  }
+}
+
 /** One published version's manifest fields (npm answers as an object or a list). */
-function manifestOf(name, version) {
-  return unwrap(npmJson(['view', `${name}@${version}`, 'version', 'peerDependencies']))
+function manifestOf(name, version, online = false) {
+  const manifest = unwrap(npmJson(['view', `${name}@${version}`, 'version', 'peerDependencies'], online))
+  // npm answers a version with no peerDependencies as a bare version string
+  // (sometimes a one-element array) instead of an object.
+  return typeof manifest === 'string' ? { version: manifest } : manifest
 }
 
 /** version → tag for every published version, plus the lines it was judged against. */
-function table(name, lines) {
-  return publishedVersions(name).map((version) => {
-    const manifest = manifestOf(name, version)
+function table(name, lines, online = false) {
+  return publishedVersions(name, online).map((version) => {
+    const manifest = manifestOf(name, version, online)
     return { version: typeof manifest.version === 'string' ? manifest.version : version, tag: tagOf(manifest, lines) }
   })
 }
@@ -193,6 +215,9 @@ function newestPerTag(rows) {
 }
 
 const [command = 'pairs', ...flags] = process.argv.slice(2)
+/** Reconcile can wait for a version that `npm publish` has just added. */
+const waitFor = flags.find(flag => flag.startsWith('--wait-for='))?.slice('--wait-for='.length)
+const dryRun = flags.includes('--dry-run')
 const manifest = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'))
 const lines = dshLines()
 
@@ -208,11 +233,11 @@ if (command === 'resolve') {
   await authenticate()
   console.error(`dist-tag: npm whoami -> ${npm(['whoami'])}`)
 } else if (command === 'pairs' || command === 'reconcile') {
-  const rows = table(manifest.name, lines)
+  if (waitFor !== undefined && command === 'reconcile') await waitForPublishedVersion(manifest.name, waitFor)
+  const rows = table(manifest.name, lines, waitFor !== undefined)
   for (const { version, tag } of rows) console.error(`dist-tag: ${version} -> ${tag ?? 'unsupported (left alone)'}`)
   if (command === 'pairs') process.exit(0)
   const newest = newestPerTag(rows)
-  const dryRun = flags.includes('--dry-run')
   if (!dryRun) await authenticate()
   for (const [tag, version] of newest) {
     if (dryRun) {
