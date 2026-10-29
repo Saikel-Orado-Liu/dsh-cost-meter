@@ -76,4 +76,6 @@ jobs:
       # .github/workflows/dist-tags.yml is where that runs strictly.
       - name: Reconcile dist-tags
         continue-on-error: true
-        run: node scripts/dist-tag.mjs reconcile
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          node scripts/dist-tag.mjs reconcile --wait-for "$PKG_VERSION"
