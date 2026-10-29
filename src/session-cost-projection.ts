@@ -244,10 +244,16 @@ function searchRequestsOf(args: Record<string, unknown>): number {
   return unique.size
 }
 
-/** A completed web call's billable request count, or 0 for another tool. */
-function webRequestsOf(name: unknown, args: Record<string, unknown>): { kind: 'search' | 'fetch'; requests: number } | null {
+/**
+ * A completed web call's billable request count. Only `web_search` is billed:
+ * the shipped web profile serves `web_fetch` through the local
+ * `dsh-web-fetch-http` provider, which DeepSeek does not charge for. Fetch API
+ * prices remain in the pricebook for deployments that route fetches through
+ * DeepSeek, but no tool event identifies that route, so charging every fetch
+ * would overbill the common local-fetch profile.
+ */
+function webRequestsOf(name: unknown, args: Record<string, unknown>): { kind: 'search'; requests: number } | null {
   if (name === 'web_search') return { kind: 'search', requests: searchRequestsOf(args) }
-  if (name === 'web_fetch') return { kind: 'fetch', requests: 1 }
   return null
 }
 
