@@ -365,6 +365,22 @@ describe('PricebookHandle refresh and mutation', () => {
     json: async () => body,
   }))
 
+  it('persists Search prices in the snapshot and anchors them by event time', async () => {
+    const handle = handleWith(initialPricebookState())
+    const web = { searchPerThousand: 5, fetchPerThousand: 5 }
+    await handle.refresh({ official: { ...OFFICIAL, web } })
+    expect(handle.currentSnapshot()?.web).toEqual(web)
+    // Before 2026-11-01 00:00 Beijing requests are counted but free.
+    expect(handle.webPriceFor(Date.UTC(2026, 9, 30)).billingStarted).toBe(false)
+    expect(handle.webPriceFor(Date.UTC(2026, 10, 2)).billingStarted).toBe(true)
+    const beforeAt = (handle.currentSnapshot()?.effectiveAt ?? 0) - 1
+    const before = handle.webPriceFor(beforeAt)
+    await handle.refresh({ official: { ...OFFICIAL, web: { searchPerThousand: 50, fetchPerThousand: 50 } } })
+    expect(handle.currentSnapshot()?.web?.searchPerThousand).toBe(50)
+    // The pre-change instant stays anchored to the first snapshot.
+    expect(handle.webPriceFor(beforeAt).searchPerThousand).toBe(before.searchPerThousand)
+  })
+
   it('creates the first snapshot from injected sources and skips an unchanged refresh', async () => {
     const handle = handleWith(initialPricebookState())
     await handle.refresh({ official: OFFICIAL })
