@@ -117,7 +117,7 @@ pnpm test        # vitest run（封闭式，网络 stub）
 pnpm build       # tsc -b && tsdown（lib/ + lib/client.js）
 ```
 
-测试套件完全离线：价格页 HTML、OpenRouter 模型目录与汇率接口全部 stub。覆盖：信任围栏、余额解析、价格簿优先级链与快照选取、不可变账本折叠（含同一步替换、按*事件时间*选峰值/闲时档，以及贯穿官方免费期的 Search/Fetch 请求计费）、子代理聚合（持久子代理树的嵌套/冷会话/失败回退，以及真实 `SessionStore` + 投影注册表上的多层链路），以及客户端表面（jsdom）。`.github/workflows/compat.yml` 每天在 `main`、`next`、`alpha` 三条分支上安装各自的 DSH 最新补丁并重跑构建与测试，DSH 新版本破坏任一通道时 CI 会直接变红，无需手动检查。
+测试套件完全离线：价格页 HTML、OpenRouter 模型目录与汇率接口全部 stub。覆盖：信任围栏、余额解析、价格簿优先级链与快照选取、不可变账本折叠（含同一步替换、按*事件时间*选峰值/闲时档，以及贯穿官方免费期的 Search/Fetch 请求计费）、子代理聚合（持久子代理树的嵌套/冷会话/失败回退，以及真实 `SessionStore` + 投影注册表上的多层链路），以及客户端表面（jsdom）。`.github/workflows/compat.yml` 在推送到 `main`、`next`、`alpha` 时测试对应分支，并每天对三条分支跑完整矩阵——安装各自的 DSH 最新补丁并重跑构建与测试；DSH 新版本破坏任一通道时 CI 会直接变红，无需手动检查。
 
 ### 发布通道
 
