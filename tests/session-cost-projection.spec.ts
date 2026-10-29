@@ -250,13 +250,13 @@ describe('Search / Fetch billing', () => {
     expect(view.steps[0].searchRequests).toBe(2)
   })
 
-  it('counts Fetch requests at the same per-request rate', () => {
+  it('does not bill web_fetch: the shipped profile fetches through the local HTTP provider', () => {
     const handle = handleWith([snapshotFixture(1, 0)])
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000), handle)
     state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 1, 1, 'c1', 'web_fetch', { url: 'https://example.com' }), handle)
     state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 10, 1, 1, 'c1'), handle)
-    expect(viewSessionCost(state).web).toMatchObject({ searchRequests: 0, fetchRequests: 1, cost: 0.005 })
+    expect(viewSessionCost(state).web).toMatchObject({ searchRequests: 0, fetchRequests: 0, cost: 0 })
   })
 
   it('counts requests during the grace period but prices them at zero', () => {
@@ -284,9 +284,9 @@ describe('Search / Fetch billing', () => {
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000), handle)
     state = foldSessionCost(state, toolCall(POST_WEB_BILLING, 2, 3, 'root', 'run_code', {}), handle)
-    state = foldSessionCost(state, ptcDispatch(POST_WEB_BILLING + 10, 'root', 'web_fetch', { url: 'https://example.com' }), handle)
+    state = foldSessionCost(state, ptcDispatch(POST_WEB_BILLING + 10, 'root', 'web_search', { queries: ['a'] }), handle)
     const view = viewSessionCost(state)
-    expect(view.steps[0]).toMatchObject({ turn: 2, step: 3, fetchRequests: 1 })
+    expect(view.steps[0]).toMatchObject({ turn: 2, step: 3, searchRequests: 1 })
     expect(view.web?.cost).toBeCloseTo(0.005)
   })
 
@@ -313,10 +313,10 @@ describe('Search / Fetch billing', () => {
     let state = init()
     state = foldSessionCost(state, headerEvent(1_000), handle)
     state = foldSessionCost(state, usageEvent(POST_WEB_BILLING, 1, 1, { inputTokens: 1_000_000, outputTokens: 1_000_000 }), handle)
-    state = foldSessionCost(state, toolCall(POST_WEB_BILLING + 10, 1, 1, 'c1', 'web_fetch', { url: 'https://example.com' }), handle)
+    state = foldSessionCost(state, toolCall(POST_WEB_BILLING + 10, 1, 1, 'c1', 'web_search', { queries: ['a'] }), handle)
     state = foldSessionCost(state, toolResult(POST_WEB_BILLING + 20, 1, 1, 'c1'), handle)
     const step = viewSessionCost(state).steps[0]
-    // 10:00 Beijing is peak: 1M × 2 + 1M × 8 = 10; plus one Fetch request 0.005
+    // 10:00 Beijing is peak: 1M × 2 + 1M × 8 = 10; plus one Search request 0.005
     expect(step.cost).toBeCloseTo(10.005)
     expect(step.webCost).toBeCloseTo(0.005)
     expect(step.uncachedInputTokens).toBe(1_000_000)
