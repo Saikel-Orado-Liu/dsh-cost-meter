@@ -1,0 +1,52 @@
+name: compat.yml
+
+# Keeps all three release channels honest without a manual check: every day the
+# workflow installs each branch's declared DSH line at its newest published
+# patch, builds, and runs the suite. main tracks DSH latest, next tracks the
+# upcoming line, and alpha tracks the alpha line. A new DSH release that breaks
+# a channel turns this workflow red before a release is cut.
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  channel:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        branch: [main, next, alpha]
+    steps:
+      - name: Checkout ${{ matrix.branch }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Show the DSH lines this run targets
+        run: npm view @deepseek-ai/dsh dist-tags --json
+
+      # No frozen lockfile: within the branch's declared range this resolves
+      # the newest published DSH patch, which is exactly what a compatibility
+      # check must exercise.
+      - name: Install the channel's DSH patch
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
