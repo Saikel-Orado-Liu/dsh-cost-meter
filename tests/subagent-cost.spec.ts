@@ -17,9 +17,9 @@ import {
 } from '../src/subagent-cost.ts'
 import type { SessionCostTotals } from '../src/types.ts'
 
-const ZERO: SessionCostTotals = { uncachedCost: 0, cacheReadCost: 0, outputCost: 0, cost: 0, pricedSteps: 0, unpricedSteps: 0, steps: 0 }
-const TOTALS_A: SessionCostTotals = { uncachedCost: 1, cacheReadCost: 0.1, outputCost: 2, cost: 3.1, pricedSteps: 2, unpricedSteps: 0, steps: 2 }
-const TOTALS_B: SessionCostTotals = { uncachedCost: 0.5, cacheReadCost: 0, outputCost: 1, cost: 1.5, pricedSteps: 1, unpricedSteps: 0, steps: 1 }
+const ZERO: SessionCostTotals = { uncachedCost: 0, cacheReadCost: 0, outputCost: 0, cost: 0, pricedSteps: 0, unpricedSteps: 0, steps: 0, webCost: 0, searchRequests: 0, fetchRequests: 0 }
+const TOTALS_A: SessionCostTotals = { uncachedCost: 1, cacheReadCost: 0.1, outputCost: 2, cost: 3.1, pricedSteps: 2, unpricedSteps: 0, steps: 2, webCost: 0.01, searchRequests: 2, fetchRequests: 0 }
+const TOTALS_B: SessionCostTotals = { uncachedCost: 0.5, cacheReadCost: 0, outputCost: 1, cost: 1.5, pricedSteps: 1, unpricedSteps: 0, steps: 1, webCost: 0.005, searchRequests: 1, fetchRequests: 0 }
 
 interface FakeSession { id: string }
 
