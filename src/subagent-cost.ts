@@ -103,6 +103,9 @@ const ZERO_TOTALS: SessionCostTotals = {
   pricedSteps: 0,
   unpricedSteps: 0,
   steps: 0,
+  webCost: 0,
+  searchRequests: 0,
+  fetchRequests: 0,
 }
 
 /** One cold session's folded ledger, with the log watermark it describes. */
@@ -350,6 +353,9 @@ export function sumTotals(totals: readonly SessionCostTotals[]): SessionCostTota
     sum.pricedSteps += totalsEntry.pricedSteps
     sum.unpricedSteps += totalsEntry.unpricedSteps
     sum.steps += totalsEntry.steps
+    sum.webCost = (sum.webCost ?? 0) + (totalsEntry.webCost ?? 0)
+    sum.searchRequests = (sum.searchRequests ?? 0) + (totalsEntry.searchRequests ?? 0)
+    sum.fetchRequests = (sum.fetchRequests ?? 0) + (totalsEntry.fetchRequests ?? 0)
   }
   return sum
 }
