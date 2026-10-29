@@ -1,15 +1,11 @@
 name: compat.yml
 
-# Runs the build and suite on every push to a release branch, and once a day
-# across all three channels. main tracks DSH latest, next the upcoming line,
-# and alpha the alpha line; a new DSH release that breaks a channel turns this
-# workflow red before a release is cut. A push tests only the pushed branch;
-# the scheduled run is the full three-channel matrix.
+# Runs the build and suite on every push to a release branch, testing only the
+# pushed channel. Manual dispatch is the full three-channel sweep across the
+# current npm DSH patches. There is deliberately no schedule.
 on:
   push:
     branches: [main, next, alpha]
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
 
 permissions:
