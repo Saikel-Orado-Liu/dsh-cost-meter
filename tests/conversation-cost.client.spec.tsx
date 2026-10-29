@@ -149,6 +149,9 @@ function zhT(key: string, params?: Record<string, string>): string {
     'view.uncached': '输入（缓存未命中）',
     'view.cacheRead': '输入（缓存命中）',
     'view.output': '输出',
+    'view.web': '搜索 API',
+    'web.requests': '共 {search} 次成功请求',
+    'web.grace': '计费自 2026-11-01 起，当前仅计数',
     'view.unpriced': '{count} 步无价格',
     'view.steps': '每轮回复花费',
     'step.turn': '第 {turn} 轮',
@@ -817,6 +820,24 @@ describe('CostView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('shows Search API requests and their cost in the summary', async () => {
+    stubFetch(RESPONSE)
+    const ledger = {
+      ...PROJECTION,
+      totals: { ...PROJECTION.totals, webCost: 0.01, searchRequests: 2 },
+      web: { searchRequests: 2, fetchRequests: 0, cost: 0.01, billingStarted: true },
+    }
+    render(<CostView
+      useProjection={() => ledger as never}
+      sessionId={"s1" as never}
+      t={zhT}
+    />)
+    const view = await screen.findByTestId('cost-view')
+    expect(view.textContent).toContain('搜索 API')
+    expect(view.textContent).toContain('¥0.01')
+    expect(view.textContent).toContain('共 2 次成功请求')
   })
 
   it('keeps an off-peak reply green even while the clock is in a peak hour', async () => {
