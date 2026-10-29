@@ -445,18 +445,23 @@ export async function apply(ctx: Context, config?: Config): Promise<void> {
   // ── sessionCost projections: anchored per-step ledgers for CNY and USD,
   //  plus the pricebook-free message index the per-reply chip resolves
   //  through (the action row hands over a message id, not a Turn). ──
-  ctx.effect(
-    () => ctx.sessionProjections.register(sessionCostProjection(pricebookCny, 'sessionCost')),
-    'cost-meter: sessionCost projection',
-  )
-  ctx.effect(
-    () => ctx.sessionProjections.register(sessionCostProjection(pricebookUsd, 'sessionCostUsd')),
-    'cost-meter: sessionCostUsd projection',
-  )
-  ctx.effect(
-    () => ctx.sessionProjections.register(sessionCostIndexProjection()),
-    'cost-meter: sessionCostIndex projection',
-  )
+  //
+  // DSH 0.2.1 returns the effect's disposer synchronously; DSH 0.2.2-alpha
+  // returns a promise of a handle whose dispose() must be awaited. Awaiting
+  // Promise.all covers both shapes, and the one cleanup below dispatches on
+  // the value it actually received.
+  type ProjectionRegistration = (() => void) | { dispose: () => Promise<void> }
+  const projectionRegistrations = await Promise.all([
+    ctx.sessionProjections.register(sessionCostProjection(pricebookCny, 'sessionCost')),
+    ctx.sessionProjections.register(sessionCostProjection(pricebookUsd, 'sessionCostUsd')),
+    ctx.sessionProjections.register(sessionCostIndexProjection()),
+  ]) as unknown as ProjectionRegistration[]
+  ctx.effect(() => () => {
+    for (const registration of projectionRegistrations) {
+      if (typeof registration === 'function') registration()
+      else void registration.dispose()
+    }
+  }, 'cost-meter: session projections')
 
   // ── Balance: cached refresh, one in-flight at a time. ──
   let lastBalance: { at: number; snapshot: BalanceSnapshot } | undefined
